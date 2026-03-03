@@ -1,394 +1,468 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, createContext, useContext } from "react";
 
-// ─── Supabase ────────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════
+// DATABASE
+// ══════════════════════════════════════════════════════════
 const SB_URL = "https://rrexmdfnyyurqtmvebiw.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJyZXhtZGZueXl1cnF0bXZlYml3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1MzAzMjEsImV4cCI6MjA4ODEwNjMyMX0.nmPMCosEMFj1epHMvsOVyfAoWJXDPqU0AL11ZcrE0j8";
-const H = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" };
-
-const api = {
-  get:    (path) => fetch(`${SB_URL}/rest/v1/${path}`, { headers: H }).then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e))),
-  post:   (path, body) => fetch(`${SB_URL}/rest/v1/${path}`, { method: "POST", headers: H, body: JSON.stringify(body) }).then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e))),
-  patch:  (path, body) => fetch(`${SB_URL}/rest/v1/${path}`, { method: "PATCH", headers: H, body: JSON.stringify(body) }).then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e))),
-  delete: (path) => fetch(`${SB_URL}/rest/v1/${path}`, { method: "DELETE", headers: H }).then(r => { if (!r.ok) return r.json().then(e => Promise.reject(e)); return []; }),
+const H = () => ({ apikey:SB_KEY, Authorization:`Bearer ${SB_KEY}`, "Content-Type":"application/json", Prefer:"return=representation" });
+const ok = async r => { const t=await r.text(); if(r.ok) return t?JSON.parse(t):[]; throw await r.json().catch(()=>({message:r.statusText})); };
+const db = {
+  get:    p    => fetch(`${SB_URL}/rest/v1/${p}`,{headers:H()}).then(ok),
+  post:   (p,b)=> fetch(`${SB_URL}/rest/v1/${p}`,{method:"POST",  headers:H(),body:JSON.stringify(b)}).then(ok),
+  patch:  (p,b)=> fetch(`${SB_URL}/rest/v1/${p}`,{method:"PATCH", headers:H(),body:JSON.stringify(b)}).then(ok),
+  del:    p    => fetch(`${SB_URL}/rest/v1/${p}`,{method:"DELETE",headers:H()}).then(ok),
 };
 
-// ─── Admin credentials ───────────────────────────────────────────────────────
-const ADMIN_USER = "ahsan";
-const ADMIN_PASS = "ahsan123";
+// ══════════════════════════════════════════════════════════
+// THEME CONTEXT
+// ══════════════════════════════════════════════════════════
+const ThemeCtx = createContext({dark:true,toggle:()=>{}});
+const useTheme = () => useContext(ThemeCtx);
 
-// ─── Constants ───────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════
+// AUTH CONTEXT
+// ══════════════════════════════════════════════════════════
+const AuthCtx = createContext(null);
+const useAuth = () => useContext(AuthCtx);
+
+// ══════════════════════════════════════════════════════════
+// CONSTANTS
+// ══════════════════════════════════════════════════════════
 const TIMEZONES = [
-  { label: "Pakistan (PKT)",   value: "Asia/Karachi",        flag: "🇵🇰" },
-  { label: "UAE (GST)",        value: "Asia/Dubai",          flag: "🇦🇪" },
-  { label: "India (IST)",      value: "Asia/Kolkata",        flag: "🇮🇳" },
-  { label: "UK (GMT/BST)",     value: "Europe/London",       flag: "🇬🇧" },
-  { label: "Germany (CET)",    value: "Europe/Berlin",       flag: "🇩🇪" },
-  { label: "USA Eastern",      value: "America/New_York",    flag: "🇺🇸" },
-  { label: "USA Pacific",      value: "America/Los_Angeles", flag: "🇺🇸" },
-  { label: "Australia (AEST)", value: "Australia/Sydney",    flag: "🇦🇺" },
+  {label:"Pakistan (PKT)",value:"Asia/Karachi",flag:"🇵🇰"},
+  {label:"UAE (GST)",value:"Asia/Dubai",flag:"🇦🇪"},
+  {label:"India (IST)",value:"Asia/Kolkata",flag:"🇮🇳"},
+  {label:"UK (GMT/BST)",value:"Europe/London",flag:"🇬🇧"},
+  {label:"Germany (CET)",value:"Europe/Berlin",flag:"🇩🇪"},
+  {label:"USA Eastern",value:"America/New_York",flag:"🇺🇸"},
+  {label:"USA Pacific",value:"America/Los_Angeles",flag:"🇺🇸"},
+  {label:"Australia (AEST)",value:"Australia/Sydney",flag:"🇦🇺"},
 ];
-const COLORS = ["#00ff88","#6366f1","#f59e0b","#ec4899","#06b6d4","#a78bfa","#34d399","#fb923c"];
-const PROJECT_COLORS = ["#00ff88","#6366f1","#f59e0b","#ec4899","#06b6d4","#a78bfa","#f97316","#14b8a6"];
+const PROJ_COLORS=["#6366f1","#00ff88","#f59e0b","#ec4899","#06b6d4","#a78bfa","#f97316","#14b8a6"];
+const AVATAR_COLORS=["#6366f1","#00ff88","#f59e0b","#ec4899","#06b6d4","#a78bfa","#34d399","#fb923c"];
+const PRIO_MAP={low:{c:"#64748b",bg:"rgba(100,116,139,.15)",label:"Low"},medium:{c:"#f59e0b",bg:"rgba(245,158,11,.15)",label:"Medium"},high:{c:"#f97316",bg:"rgba(249,115,22,.15)",label:"High"},urgent:{c:"#dc2626",bg:"rgba(220,38,38,.15)",label:"Urgent"}};
+const STATUS_MAP={pending:{c:"#64748b",bg:"rgba(100,116,139,.15)",label:"Pending"},in_progress:{c:"#6366f1",bg:"rgba(99,102,241,.15)",label:"In Progress"},completed:{c:"#00ff88",bg:"rgba(0,255,136,.15)",label:"Completed"},blocked:{c:"#dc2626",bg:"rgba(220,38,38,.15)",label:"Blocked"}};
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-const aColor  = n => COLORS[(n||"").charCodeAt(0) % COLORS.length];
-const pColor  = n => PROJECT_COLORS[(n||"").charCodeAt(0) % PROJECT_COLORS.length];
-const initials = n => (n||"?").split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
+// ══════════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════════
+const aColor  = n => AVATAR_COLORS[(n||"").charCodeAt(0)%AVATAR_COLORS.length];
+const initials= n => (n||"?").split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
+const hms = s => { if(s==null||s<0)return"—"; const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60; return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`; };
+const hmLabel = s => { if(!s)return""; return `${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m`; };
+const fmtDate = (iso,tz) => { if(!iso)return"—"; try{return new Intl.DateTimeFormat("en-US",{timeZone:tz||"Asia/Karachi",year:"numeric",month:"short",day:"2-digit"}).format(new Date(iso));}catch{return"—";} };
+const fmtTime = (iso,tz) => { if(!iso)return"—"; try{return new Intl.DateTimeFormat("en-US",{timeZone:tz||"Asia/Karachi",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:true}).format(new Date(iso));}catch{return"—";} };
+const fmtDT   = (iso,tz) => { if(!iso)return"—"; try{return new Intl.DateTimeFormat("en-US",{timeZone:tz||"Asia/Karachi",year:"numeric",month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:true}).format(new Date(iso));}catch{return"—";} };
+const toLocalInput = iso => iso ? new Date(iso).toISOString().slice(0,16) : "";
+const calcDuration = (start,end) => { if(!start||!end)return null; const s=Math.floor((new Date(end)-new Date(start))/1000); return s>0?s:null; };
 
-function hms(s) {
-  if (s == null || s < 0) return "—";
-  const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
-  return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`;
-}
-function hmLabel(s) { if (!s) return ""; return `${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m`; }
-function fmtDate(iso, tz) {
-  if (!iso) return "—";
-  try { return new Intl.DateTimeFormat("en-US",{timeZone:tz||"Asia/Karachi",year:"numeric",month:"short",day:"2-digit"}).format(new Date(iso)); } catch { return "—"; }
-}
-function fmtTime(iso, tz) {
-  if (!iso) return "—";
-  try { return new Intl.DateTimeFormat("en-US",{timeZone:tz||"Asia/Karachi",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:true}).format(new Date(iso)); } catch { return "—"; }
-}
-function fmtDateTime(iso, tz) {
-  if (!iso) return "—";
-  try { return new Intl.DateTimeFormat("en-US",{timeZone:tz||"Asia/Karachi",year:"numeric",month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:true}).format(new Date(iso)); } catch { return "—"; }
-}
-
-function LiveClock({ tz }) {
-  const [t, setT] = useState("");
-  useEffect(() => {
-    const tick = () => setT(new Intl.DateTimeFormat("en-US",{timeZone:tz,hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:true,weekday:"short",month:"short",day:"numeric"}).format(new Date()));
-    tick(); const id = setInterval(tick,1000); return ()=>clearInterval(id);
-  }, [tz]);
+function LiveClock({tz}){
+  const [t,setT]=useState("");
+  useEffect(()=>{const tick=()=>setT(new Intl.DateTimeFormat("en-US",{timeZone:tz,hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:true,weekday:"short",month:"short",day:"numeric"}).format(new Date()));tick();const id=setInterval(tick,1000);return()=>clearInterval(id);},[tz]);
   return <>{t}</>;
 }
 
-// ─── SQL Setup text ───────────────────────────────────────────────────────────
-const SETUP_SQL = `-- Run once in Supabase SQL Editor
+// ══════════════════════════════════════════════════════════
+// THEME TOKENS
+// ══════════════════════════════════════════════════════════
+const tokens = dark => ({
+  bg:        dark?"#07070f":"#f1f5f9",
+  bgCard:    dark?"rgba(255,255,255,.04)":"#ffffff",
+  bgInput:   dark?"rgba(255,255,255,.06)":"#f8fafc",
+  border:    dark?"rgba(255,255,255,.08)":"rgba(0,0,0,.1)",
+  borderFocus:"#6366f1",
+  text:      dark?"#e2e8f0":"#0f172a",
+  textMuted: dark?"#64748b":"#64748b",
+  textDim:   dark?"#334155":"#94a3b8",
+  accent:    "#6366f1",
+  accentGlow:dark?"rgba(99,102,241,.15)":"rgba(99,102,241,.1)",
+  green:     "#00d68f",
+  red:       "#dc2626",
+  shadow:    dark?"0 4px 24px rgba(0,0,0,.4)":"0 4px 24px rgba(0,0,0,.08)",
+  gridLine:  dark?"rgba(99,102,241,.04)":"rgba(99,102,241,.06)",
+  navBg:     dark?"rgba(7,7,15,.9)":"rgba(255,255,255,.9)",
+});
 
--- Projects table
-CREATE TABLE IF NOT EXISTS projects (
-  id          UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  name        TEXT NOT NULL,
-  description TEXT,
-  color       TEXT DEFAULT '#00ff88',
-  created_at  TIMESTAMPTZ DEFAULT NOW()
-);
-ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "open_projects" ON projects FOR ALL USING (true) WITH CHECK (true);
+// ══════════════════════════════════════════════════════════
+// STYLE HELPERS
+// ══════════════════════════════════════════════════════════
+const card = (T,extra={}) => ({background:T.bgCard,border:`1px solid ${T.border}`,borderRadius:16,padding:24,...extra});
+const inp  = T => ({width:"100%",padding:"10px 14px",boxSizing:"border-box",background:T.bgInput,border:`1px solid ${T.border}`,borderRadius:10,color:T.text,fontFamily:"Inter,sans-serif",fontSize:14,outline:"none",transition:"border .15s"});
+const lbl  = T => ({fontSize:11,fontWeight:600,letterSpacing:"0.06em",color:T.textMuted,display:"block",marginBottom:6,textTransform:"uppercase"});
+const btn  = (bg,c,extra={}) => ({padding:"10px 20px",borderRadius:10,border:"none",cursor:"pointer",fontFamily:"Inter,sans-serif",fontSize:13,fontWeight:600,letterSpacing:"0.02em",background:bg,color:c,transition:"all .15s",...extra});
 
--- Add project_id to existing time_sessions (safe to run even if column exists)
-ALTER TABLE time_sessions ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES projects(id) ON DELETE SET NULL;
-
--- Refresh RLS on time_sessions
-ALTER TABLE time_sessions ENABLE ROW LEVEL SECURITY;
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='time_sessions' AND policyname='open_access') THEN
-    CREATE POLICY "open_access" ON time_sessions FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-END $$;`;
-
-// ─── Shared style constants ───────────────────────────────────────────────────
-const S = {
-  card: { background:"rgba(255,255,255,.03)", border:"1px solid rgba(255,255,255,.07)", borderRadius:14, padding:20 },
-  inp:  { width:"100%", padding:"9px 12px", boxSizing:"border-box", background:"rgba(255,255,255,.05)", border:"1px solid rgba(255,255,255,.1)", borderRadius:8, color:"#e2e8f0", fontFamily:"inherit", fontSize:13 },
-  lbl:  { fontSize:10, letterSpacing:"2px", color:"#64748b", display:"block", marginBottom:5 },
-  btn:  (bg="#00ff88",c="#070710") => ({ padding:"9px 18px", borderRadius:8, border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:"bold", letterSpacing:"1px", background:bg, color:c }),
-};
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// ROOT
-// ═══════════════════════════════════════════════════════════════════════════════
-export default function App() {
-  const [page, setPage]         = useState("projects"); // projects | tracker | admin | adminLogin | setup
-  const [projects, setProjects] = useState([]);
-  const [activeProject, setActiveProject] = useState(null);
-  const [sessions, setSessions] = useState([]);
-  const [isAdmin, setIsAdmin]   = useState(false);
-  const [toast, setToast]       = useState(null);
-  const [dbReady, setDbReady]   = useState(true);
-
-  const toast$ = (msg, type="ok") => { setToast({msg,type}); setTimeout(()=>setToast(null),3500); };
-
-  const loadProjects = async () => {
-    try { setProjects(await api.get("projects?order=created_at.asc")); setDbReady(true); }
-    catch(e) {
-      if (e?.code==="42P01" || String(e?.message).includes("does not exist")) { setDbReady(false); setPage("setup"); }
-      else toast$("Error loading projects: "+(e?.message||JSON.stringify(e)),"err");
-    }
-  };
-
-  const loadSessions = async (projectId) => {
-    try {
-      const qs = projectId ? `project_id=eq.${projectId}` : "";
-      setSessions(await api.get(`time_sessions?${qs}&order=created_at.desc&limit=500`));
-    } catch(e) { toast$("Error loading sessions: "+(e?.message||JSON.stringify(e)),"err"); }
-  };
-
-  useEffect(() => { loadProjects(); }, []);
-  useEffect(() => { if (activeProject) loadSessions(activeProject.id); }, [activeProject]);
-
-  const openProject = (p) => { setActiveProject(p); setPage("tracker"); };
-  const goProjects  = () => { setActiveProject(null); setPage("projects"); loadProjects(); };
-
-  return (
-    <div style={{ minHeight:"100vh", background:"#070710", fontFamily:"'Courier New',monospace", color:"#e2e8f0", position:"relative", overflowX:"hidden" }}>
-      {/* BG */}
-      <div style={{position:"fixed",inset:0,zIndex:0,backgroundImage:"linear-gradient(rgba(0,255,136,.02) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,136,.02) 1px,transparent 1px)",backgroundSize:"44px 44px",pointerEvents:"none"}}/>
-      <div style={{position:"fixed",top:-150,left:-150,width:600,height:600,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,255,136,.06),transparent 70%)",pointerEvents:"none",zIndex:0}}/>
-      <div style={{position:"fixed",bottom:-150,right:-150,width:700,height:700,borderRadius:"50%",background:"radial-gradient(circle,rgba(99,102,241,.06),transparent 70%)",pointerEvents:"none",zIndex:0}}/>
-
-      {/* Toast */}
-      {toast && (
-        <div style={{position:"fixed",top:20,right:20,zIndex:9999,background:toast.type==="err"?"#dc2626":"#00ff88",color:toast.type==="err"?"#fff":"#070710",padding:"12px 20px",borderRadius:10,fontWeight:"bold",fontSize:13,boxShadow:"0 8px 40px rgba(0,0,0,.5)",animation:"slideIn .3s ease",maxWidth:360}}>
-          {toast.msg}
-        </div>
-      )}
-
-      <div style={{position:"relative",zIndex:1,maxWidth:1200,margin:"0 auto",padding:"0 16px 40px"}}>
-
-        {/* ── TOP BAR ── */}
-        <TopBar
-          page={page} isAdmin={isAdmin} activeProject={activeProject}
-          onProjects={goProjects}
-          onAdmin={() => isAdmin ? setPage("admin") : setPage("adminLogin")}
-          onLogout={() => { setIsAdmin(false); setPage("projects"); }}
-        />
-
-        {/* ── PAGES ── */}
-        {page==="setup"   && <SetupPage sql={SETUP_SQL} onRetry={()=>{ loadProjects(); setPage("projects"); }}/>}
-        {page==="projects"&& <ProjectsPage projects={projects} onOpen={openProject} onRefresh={loadProjects} toast$={toast$} />}
-        {page==="tracker" && activeProject && (
-          <TrackerPage
-            project={activeProject} sessions={sessions}
-            onRefresh={()=>loadSessions(activeProject.id)} toast$={toast$}
-          />
-        )}
-        {page==="adminLogin" && <AdminLogin onSuccess={()=>{ setIsAdmin(true); setPage("admin"); }} toast$={toast$} />}
-        {page==="admin" && isAdmin && (
-          <AdminPage
-            projects={projects} sessions={sessions}
-            onRefreshProjects={loadProjects}
-            onRefreshSessions={()=>loadSessions(activeProject?.id)}
-            toast$={toast$}
-          />
-        )}
-      </div>
-
-      <style>{`
-        *{box-sizing:border-box}
-        body{margin:0;padding:0}
-        @keyframes pulse   {0%,100%{opacity:1}50%{opacity:.4}}
-        @keyframes slideIn {from{transform:translateX(80px);opacity:0}to{transform:translateX(0);opacity:1}}
-        @keyframes glowRed {0%,100%{box-shadow:0 0 12px rgba(220,38,38,.3)}50%{box-shadow:0 0 28px rgba(220,38,38,.6)}}
-        @keyframes fadeIn  {from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-        input:focus,textarea:focus,select:focus{outline:1px solid #00ff88 !important;border-color:#00ff88 !important}
-        button:hover{opacity:.82}
-        ::-webkit-scrollbar{width:5px;height:5px}
-        ::-webkit-scrollbar-track{background:#070710}
-        ::-webkit-scrollbar-thumb{background:#1e293b;border-radius:3px}
-      `}</style>
+// ══════════════════════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════════════════════
+function Toast({toast}){
+  if(!toast)return null;
+  return(
+    <div style={{position:"fixed",top:24,right:24,zIndex:99999,background:toast.type==="err"?"#dc2626":"#00d68f",color:"#fff",padding:"14px 22px",borderRadius:12,fontWeight:600,fontSize:14,boxShadow:"0 8px 32px rgba(0,0,0,.3)",animation:"toastIn .3s ease",maxWidth:380,fontFamily:"Inter,sans-serif"}}>
+      {toast.msg}
     </div>
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+// MODAL WRAPPER
+// ══════════════════════════════════════════════════════════
+function Modal({onClose,children,T,width=560}){
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:9000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div style={{...card(T),width:"100%",maxWidth:width,maxHeight:"90vh",overflowY:"auto",animation:"fadeUp .25s ease"}} onClick={e=>e.stopPropagation()}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+// ROOT APP
+// ══════════════════════════════════════════════════════════
+export default function App(){
+  const [dark,setDark]=useState(()=>{try{return localStorage.getItem("tf_dark")!=="false";}catch{return true;}});
+  const [user,setUser]=useState(()=>{try{const u=localStorage.getItem("tf_user");return u?JSON.parse(u):null;}catch{return null;}});
+  const [toast,setToast]=useState(null);
+  const [page,setPage]=useState("projects");
+  const [activeProject,setActiveProject]=useState(null);
+
+  const T=tokens(dark);
+  const toggleDark=()=>{setDark(d=>{const n=!d;try{localStorage.setItem("tf_dark",n);}catch{}return n;});};
+  const toast$=(msg,type="ok")=>{setToast({msg,type});setTimeout(()=>setToast(null),3500);};
+
+  const login=(u)=>{setUser(u);try{localStorage.setItem("tf_user",JSON.stringify(u));}catch{}setPage("projects");};
+  const logout=()=>{setUser(null);try{localStorage.removeItem("tf_user");}catch{}setPage("projects");setActiveProject(null);};
+
+  if(!user) return(
+    <ThemeCtx.Provider value={{dark,toggle:toggleDark,T}}>
+      <Toast toast={toast}/>
+      <LoginPage onLogin={login} toast$={toast$}/>
+      <GlobalStyle dark={dark}/>
+    </ThemeCtx.Provider>
+  );
+
+  return(
+    <ThemeCtx.Provider value={{dark,toggle:toggleDark,T}}>
+      <AuthCtx.Provider value={{user,logout}}>
+        <Toast toast={toast}/>
+        <div style={{minHeight:"100vh",background:T.bg,color:T.text,fontFamily:"Inter,sans-serif",transition:"background .3s,color .3s"}}>
+          <BgDecor T={T} dark={dark}/>
+          <div style={{position:"relative",zIndex:1}}>
+            <TopBar page={page} setPage={setPage} activeProject={activeProject} onGoProjects={()=>{setPage("projects");setActiveProject(null);}} T={T} toggleDark={toggleDark} dark={dark}/>
+            <div style={{maxWidth:1280,margin:"0 auto",padding:"0 20px 60px"}}>
+              {page==="projects" && <ProjectsPage setPage={setPage} setActiveProject={setActiveProject} toast$={toast$} T={T}/>}
+              {page==="tracker"  && activeProject && <TrackerPage project={activeProject} toast$={toast$} T={T}/>}
+              {page==="admin"    && user.role==="admin" && <AdminPage toast$={toast$} T={T}/>}
+            </div>
+          </div>
+        </div>
+        <GlobalStyle dark={dark}/>
+      </AuthCtx.Provider>
+    </ThemeCtx.Provider>
+  );
+}
+
+function BgDecor({T,dark}){
+  return(<>
+    <div style={{position:"fixed",inset:0,zIndex:0,backgroundImage:`linear-gradient(${T.gridLine} 1px,transparent 1px),linear-gradient(90deg,${T.gridLine} 1px,transparent 1px)`,backgroundSize:"48px 48px",pointerEvents:"none"}}/>
+    <div style={{position:"fixed",top:-200,left:-200,width:700,height:700,borderRadius:"50%",background:`radial-gradient(circle,${dark?"rgba(99,102,241,.08)":"rgba(99,102,241,.06)"},transparent 70%)`,pointerEvents:"none",zIndex:0}}/>
+    <div style={{position:"fixed",bottom:-200,right:-200,width:800,height:800,borderRadius:"50%",background:`radial-gradient(circle,${dark?"rgba(0,214,143,.05)":"rgba(0,214,143,.04)"},transparent 70%)`,pointerEvents:"none",zIndex:0}}/>
+  </>);
+}
+
+function GlobalStyle({dark}){
+  return(
+    <style>{`
+      *{box-sizing:border-box;-webkit-font-smoothing:antialiased}
+      body{margin:0;padding:0}
+      @keyframes toastIn{from{transform:translateX(60px);opacity:0}to{transform:translateX(0);opacity:1}}
+      @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+      @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+      @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+      @keyframes glowRed{0%,100%{box-shadow:0 0 14px rgba(220,38,38,.4)}50%{box-shadow:0 0 32px rgba(220,38,38,.7)}}
+      @keyframes spin{to{transform:rotate(360deg)}}
+      input:focus,textarea:focus,select:focus{outline:none!important;border-color:#6366f1!important;box-shadow:0 0 0 3px rgba(99,102,241,.15)!important}
+      button:active{transform:scale(.97)}
+      ::-webkit-scrollbar{width:6px;height:6px}
+      ::-webkit-scrollbar-track{background:transparent}
+      ::-webkit-scrollbar-thumb{background:${dark?"#1e293b":"#cbd5e1"};border-radius:4px}
+    `}</style>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
 // TOP BAR
-// ═══════════════════════════════════════════════════════════════════════════════
-function TopBar({ page, isAdmin, activeProject, onProjects, onAdmin, onLogout }) {
-  return (
-    <div style={{display:"flex",alignItems:"center",gap:16,padding:"20px 0 16px",borderBottom:"1px solid rgba(255,255,255,.06)",marginBottom:28,flexWrap:"wrap"}}>
-      {/* Brand */}
-      <div style={{display:"flex",flexDirection:"column",cursor:"pointer"}} onClick={onProjects}>
-        <div style={{fontSize:10,letterSpacing:"5px",color:"#00ff88",marginBottom:2}}>TENSORFOLD.AI</div>
-        <div style={{fontSize:"clamp(16px,3vw,22px)",fontWeight:900,color:"#fff",letterSpacing:"-0.5px",lineHeight:1}}>
-          TIME TRACKER
+// ══════════════════════════════════════════════════════════
+function TopBar({page,setPage,activeProject,onGoProjects,T,toggleDark,dark}){
+  const {user,logout}=useAuth();
+  return(
+    <div style={{background:T.navBg,backdropFilter:"blur(12px)",borderBottom:`1px solid ${T.border}`,position:"sticky",top:0,zIndex:100}}>
+      <div style={{maxWidth:1280,margin:"0 auto",padding:"0 20px",display:"flex",alignItems:"center",gap:16,height:64,flexWrap:"wrap"}}>
+
+        {/* Brand */}
+        <div style={{cursor:"pointer",userSelect:"none"}} onClick={onGoProjects}>
+          <div style={{fontSize:10,fontWeight:800,letterSpacing:"0.2em",color:T.accent,lineHeight:1}}>TENSORFOLD.AI</div>
+          <div style={{fontSize:18,fontWeight:800,color:T.text,letterSpacing:"-0.03em",lineHeight:1.1}}>Time Tracker</div>
+        </div>
+
+        {/* Breadcrumb */}
+        {activeProject&&(
+          <div style={{display:"flex",alignItems:"center",gap:8,fontSize:13,color:T.textMuted}}>
+            <span style={{cursor:"pointer"}} onClick={onGoProjects}>Projects</span>
+            <span>/</span>
+            <span style={{color:activeProject.color||T.accent,fontWeight:600}}>{activeProject.name}</span>
+          </div>
+        )}
+
+        <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center"}}>
+          {/* Dark/Light toggle */}
+          <button onClick={toggleDark} title="Toggle theme"
+            style={{...btn(T.bgInput,T.textMuted),padding:"8px 12px",border:`1px solid ${T.border}`,fontSize:16}}>
+            {dark?"☀️":"🌙"}
+          </button>
+
+          {/* Admin link */}
+          {user.role==="admin"&&(
+            <button onClick={()=>setPage("admin")}
+              style={{...btn(page==="admin"?T.accent:"transparent",page==="admin"?"#fff":T.textMuted),border:`1px solid ${page==="admin"?T.accent:T.border}`,padding:"8px 16px"}}>
+              ⚙ Admin
+            </button>
+          )}
+
+          {/* User chip */}
+          <div style={{display:"flex",alignItems:"center",gap:8,background:T.bgInput,border:`1px solid ${T.border}`,borderRadius:10,padding:"6px 12px"}}>
+            <div style={{width:28,height:28,borderRadius:"50%",background:aColor(user.full_name),display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:"#fff"}}>{initials(user.full_name)}</div>
+            <div style={{lineHeight:1.2}}>
+              <div style={{fontSize:13,fontWeight:600,color:T.text}}>{user.full_name}</div>
+              <div style={{fontSize:10,color:T.accent,textTransform:"uppercase",letterSpacing:"0.05em"}}>{user.role}</div>
+            </div>
+            <button onClick={logout} style={{...btn("transparent",T.textMuted),padding:"4px 8px",fontSize:12,marginLeft:4}}>Logout</button>
+          </div>
         </div>
       </div>
+    </div>
+  );
+}
 
-      {/* Breadcrumb */}
-      {activeProject && (
-        <div style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#475569"}}>
-          <span style={{cursor:"pointer",color:"#64748b"}} onClick={onProjects}>All Projects</span>
-          <span>/</span>
-          <span style={{color:activeProject.color||"#00ff88",fontWeight:"bold"}}>{activeProject.name}</span>
+// ══════════════════════════════════════════════════════════
+// LOGIN PAGE
+// ══════════════════════════════════════════════════════════
+function LoginPage({onLogin,toast$}){
+  const {T,dark,toggle}=useTheme();
+  const [u,setU]=useState("");
+  const [p,setP]=useState("");
+  const [showP,setShowP]=useState(false);
+  const [busy,setBusy]=useState(false);
+
+  const login=async()=>{
+    if(!u.trim()||!p.trim())return toast$("Enter username and password","err");
+    setBusy(true);
+    try{
+      const rows=await db.get(`users?username=eq.${encodeURIComponent(u.trim())}&password=eq.${encodeURIComponent(p.trim())}&limit=1`);
+      if(!rows.length)return toast$("Invalid username or password","err");
+      onLogin(rows[0]);
+    }catch(e){toast$("Login error: "+(e?.message||"Unknown"),"err");}
+    finally{setBusy(false);}
+  };
+
+  const accent="#6366f1";
+  return(
+    <div style={{minHeight:"100vh",background:dark?"#07070f":"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:"Inter,sans-serif",position:"relative",overflow:"hidden"}}>
+      {/* Decorative orbs */}
+      <div style={{position:"fixed",top:"-30%",left:"-20%",width:"70vw",height:"70vw",borderRadius:"50%",background:"radial-gradient(circle,rgba(99,102,241,.12),transparent 65%)",pointerEvents:"none"}}/>
+      <div style={{position:"fixed",bottom:"-30%",right:"-20%",width:"70vw",height:"70vw",borderRadius:"50%",background:"radial-gradient(circle,rgba(0,214,143,.08),transparent 65%)",pointerEvents:"none"}}/>
+      <div style={{position:"fixed",inset:0,backgroundImage:`linear-gradient(rgba(99,102,241,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(99,102,241,.03) 1px,transparent 1px)`,backgroundSize:"40px 40px",pointerEvents:"none"}}/>
+
+      {/* Theme toggle */}
+      <button onClick={toggle} style={{position:"fixed",top:20,right:20,background:dark?"rgba(255,255,255,.08)":"rgba(0,0,0,.06)",border:"none",borderRadius:10,padding:"8px 14px",cursor:"pointer",fontSize:18,color:dark?"#e2e8f0":"#0f172a",zIndex:10}}>
+        {dark?"☀️":"🌙"}
+      </button>
+
+      <div style={{width:"100%",maxWidth:460,position:"relative",zIndex:1,animation:"fadeUp .5s ease"}}>
+
+        {/* Logo block */}
+        <div style={{textAlign:"center",marginBottom:40}}>
+          <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:72,height:72,borderRadius:20,background:`linear-gradient(135deg, ${accent}, #8b5cf6)`,boxShadow:`0 12px 40px rgba(99,102,241,.4)`,marginBottom:20,fontSize:32}}>⏱</div>
+          <div style={{fontSize:11,fontWeight:800,letterSpacing:"0.25em",color:accent,marginBottom:8}}>TENSORFOLD.AI</div>
+          <h1 style={{margin:0,fontSize:"clamp(26px,4vw,36px)",fontWeight:900,color:dark?"#fff":"#0f172a",letterSpacing:"-0.04em",lineHeight:1.1}}>Time Tracker</h1>
+          <p style={{margin:"10px 0 0",fontSize:14,color:dark?"#64748b":"#64748b"}}>Sign in to your workspace</p>
         </div>
-      )}
 
-      <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-        <button onClick={onProjects}
-          style={{...S.btn(page==="projects"?"#00ff88":"rgba(255,255,255,.06)",page==="projects"?"#070710":"#64748b")}}>
-          🗂 PROJECTS
-        </button>
-        {isAdmin ? (
-          <>
-            <button onClick={onAdmin}
-              style={{...S.btn(page==="admin"?"#6366f1":"rgba(255,255,255,.06)",page==="admin"?"#fff":"#64748b")}}>
-              ⚙ ADMIN
-            </button>
-            <button onClick={onLogout} style={{...S.btn("rgba(220,38,38,.15)","#dc2626"), border:"1px solid rgba(220,38,38,.25)"}}>
-              LOGOUT
-            </button>
-          </>
-        ) : (
-          <button onClick={onAdmin} style={{...S.btn("rgba(255,255,255,.06)","#64748b")}}>
-            🔐 ADMIN
+        {/* Card */}
+        <div style={{background:dark?"rgba(255,255,255,.05)":"#fff",border:`1px solid ${dark?"rgba(255,255,255,.1)":"rgba(0,0,0,.08)"}`,borderRadius:20,padding:36,boxShadow:dark?"0 24px 80px rgba(0,0,0,.5)":"0 24px 80px rgba(0,0,0,.1)"}}>
+
+          <div style={{marginBottom:20}}>
+            <label style={{...lbl(T),marginBottom:8}}>Username</label>
+            <input value={u} onChange={e=>setU(e.target.value)} placeholder="Enter your username"
+              style={{...inp(T),fontSize:15,padding:"12px 16px"}} onKeyDown={e=>e.key==="Enter"&&login()}/>
+          </div>
+
+          <div style={{marginBottom:28}}>
+            <label style={{...lbl(T),marginBottom:8}}>Password</label>
+            <div style={{position:"relative"}}>
+              <input type={showP?"text":"password"} value={p} onChange={e=>setP(e.target.value)} placeholder="Enter your password"
+                style={{...inp(T),fontSize:15,padding:"12px 44px 12px 16px"}} onKeyDown={e=>e.key==="Enter"&&login()}/>
+              <button onClick={()=>setShowP(v=>!v)}
+                style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:T.textMuted,fontSize:13,fontFamily:"inherit",fontWeight:600,padding:"2px 6px"}}>
+                {showP?"HIDE":"SHOW"}
+              </button>
+            </div>
+          </div>
+
+          <button onClick={login} disabled={busy}
+            style={{...btn(`linear-gradient(135deg, ${accent}, #8b5cf6)`,"#fff"),width:"100%",padding:"14px",fontSize:15,fontWeight:700,borderRadius:12,boxShadow:busy?"none":`0 8px 24px rgba(99,102,241,.35)`,opacity:busy?.7:1,letterSpacing:"0.02em"}}>
+            {busy?"Signing in…":"Sign In →"}
+          </button>
+
+          <div style={{textAlign:"center",marginTop:20,fontSize:12,color:T.textMuted}}>
+            Contact your admin if you don't have an account
+          </div>
+        </div>
+
+        <p style={{textAlign:"center",fontSize:11,color:dark?"#1e293b":"#cbd5e1",marginTop:24,letterSpacing:"0.1em"}}>
+          TENSORFOLD.AI · DISTRIBUTED TEAM TRACKER
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+// PROJECTS PAGE
+// ══════════════════════════════════════════════════════════
+function ProjectsPage({setPage,setActiveProject,toast$,T}){
+  const {user}=useAuth();
+  const [projects,setProjects]=useState([]);
+  const [myMemberships,setMyMemberships]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [showCreate,setShowCreate]=useState(false);
+  const [form,setForm]=useState({name:"",description:"",color:"#6366f1"});
+  const [busy,setBusy]=useState(false);
+
+  const load=async()=>{
+    setLoading(true);
+    try{
+      const [projs,members]=await Promise.all([
+        db.get("projects?order=created_at.asc"),
+        db.get(`project_members?user_id=eq.${user.id}`),
+      ]);
+      setMyMemberships(members);
+      if(user.role==="admin") setProjects(projs);
+      else{
+        const myIds=new Set(members.map(m=>m.project_id));
+        setProjects(projs.filter(p=>myIds.has(p.id)));
+      }
+    }catch(e){toast$("Error: "+e?.message,"err");}
+    finally{setLoading(false);}
+  };
+
+  useEffect(()=>{load();},[]);
+
+  const create=async()=>{
+    if(!form.name.trim())return toast$("Enter project name","err");
+    setBusy(true);
+    try{
+      await db.post("projects",{name:form.name.trim(),description:form.description.trim()||null,color:form.color});
+      toast$("✅ Project created!");setForm({name:"",description:"",color:"#6366f1"});setShowCreate(false);load();
+    }catch(e){toast$("Error: "+e?.message,"err");}
+    finally{setBusy(false);}
+  };
+
+  const deleteProject=async(id)=>{
+    if(!confirm("Delete this project? All sessions and tasks will be removed."))return;
+    try{await db.del(`projects?id=eq.${id}`);toast$("Deleted.");load();}
+    catch(e){toast$("Error: "+e?.message,"err");}
+  };
+
+  const openProject=p=>{setActiveProject(p);setPage("tracker");};
+
+  return(
+    <div style={{paddingTop:32,animation:"fadeIn .4s ease"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:32,flexWrap:"wrap",gap:12}}>
+        <div>
+          <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.12em",color:T.textMuted,marginBottom:4}}>WORKSPACE</div>
+          <h2 style={{margin:0,fontSize:"clamp(22px,3vw,32px)",fontWeight:800,color:T.text,letterSpacing:"-0.03em"}}>
+            {user.role==="admin"?"All Projects":"My Projects"}
+          </h2>
+        </div>
+        {user.role==="admin"&&(
+          <button onClick={()=>setShowCreate(v=>!v)}
+            style={{...btn(showCreate?"rgba(220,38,38,.15)":T.accent,showCreate?"#dc2626":"#fff"),padding:"12px 24px",fontSize:14,borderRadius:12,boxShadow:showCreate?"none":"0 4px 16px rgba(99,102,241,.3)"}}>
+            {showCreate?"✕ Cancel":"＋ New Project"}
           </button>
         )}
       </div>
-    </div>
-  );
-}
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// SETUP PAGE
-// ═══════════════════════════════════════════════════════════════════════════════
-function SetupPage({ sql, onRetry }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <div style={{...S.card, border:"1px solid rgba(251,191,36,.2)", animation:"fadeIn .4s ease"}}>
-      <div style={{fontSize:10,letterSpacing:"3px",color:"#fbbf24",marginBottom:16}}>⚙ DATABASE SETUP REQUIRED</div>
-      <p style={{color:"#94a3b8",lineHeight:1.7,marginBottom:12,fontSize:13}}>
-        Run this SQL once in your{" "}
-        <a href="https://supabase.com/dashboard/project/rrexmdfnyyurqtmvebiw/sql" target="_blank" rel="noreferrer" style={{color:"#00ff88"}}>Supabase SQL Editor ↗</a>
-      </p>
-      <div style={{position:"relative"}}>
-        <pre style={{background:"#0d1117",border:"1px solid rgba(0,255,136,.15)",borderRadius:10,padding:20,overflowX:"auto",fontSize:11,color:"#00ff88",lineHeight:1.8,margin:0}}>
-          {sql}
-        </pre>
-        <button onClick={()=>{navigator.clipboard.writeText(sql);setCopied(true);setTimeout(()=>setCopied(false),2000);}}
-          style={{position:"absolute",top:10,right:10,padding:"5px 12px",background:copied?"#065f46":"rgba(0,255,136,.15)",border:"1px solid rgba(0,255,136,.3)",borderRadius:6,color:"#00ff88",fontFamily:"inherit",fontSize:10,cursor:"pointer"}}>
-          {copied?"✓ COPIED":"COPY"}
-        </button>
-      </div>
-      <div style={{marginTop:20,display:"flex",gap:10}}>
-        <button onClick={onRetry} style={{...S.btn()}}>↻ RETRY CONNECTION</button>
-        <a href="https://supabase.com/dashboard/project/rrexmdfnyyurqtmvebiw/sql" target="_blank" rel="noreferrer"
-          style={{...S.btn("transparent","#00ff88"),border:"1px solid rgba(0,255,136,.3)",textDecoration:"none",display:"inline-flex",alignItems:"center"}}>
-          OPEN SQL EDITOR ↗
-        </a>
-      </div>
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// PROJECTS PAGE
-// ═══════════════════════════════════════════════════════════════════════════════
-function ProjectsPage({ projects, onOpen, onRefresh, toast$ }) {
-  const [showForm, setShowForm] = useState(false);
-  const [name, setName]         = useState("");
-  const [desc, setDesc]         = useState("");
-  const [color, setColor]       = useState("#00ff88");
-  const [busy, setBusy]         = useState(false);
-
-  const create = async () => {
-    if (!name.trim()) return toast$("Enter a project name!","err");
-    setBusy(true);
-    try {
-      await api.post("projects", { name: name.trim(), description: desc.trim()||null, color });
-      toast$("✅ Project created!"); setName(""); setDesc(""); setShowForm(false); onRefresh();
-    } catch(e) { toast$("Error: "+(e?.message||JSON.stringify(e)),"err"); }
-    finally { setBusy(false); }
-  };
-
-  return (
-    <div style={{animation:"fadeIn .4s ease"}}>
-      {/* Header row */}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:24,flexWrap:"wrap",gap:12}}>
-        <div>
-          <div style={{fontSize:10,letterSpacing:"3px",color:"#64748b",marginBottom:4}}>WORKSPACE</div>
-          <h2 style={{margin:0,fontSize:"clamp(20px,3vw,28px)",fontWeight:900,color:"#fff"}}>All Projects</h2>
-        </div>
-        <button onClick={()=>setShowForm(v=>!v)} style={{...S.btn(), padding:"10px 20px", fontSize:13}}>
-          {showForm?"✕ CANCEL":"＋ NEW PROJECT"}
-        </button>
-      </div>
-
-      {/* Create form */}
-      {showForm && (
-        <div style={{...S.card, border:"1px solid rgba(0,255,136,.2)", marginBottom:24, animation:"fadeIn .3s ease"}}>
-          <div style={{fontSize:10,letterSpacing:"3px",color:"#00ff88",marginBottom:16}}>CREATE PROJECT</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
+      {/* Create Form */}
+      {showCreate&&(
+        <div style={{...card(T),border:`1px solid rgba(99,102,241,.3)`,marginBottom:28,animation:"fadeUp .3s ease"}}>
+          <div style={{fontSize:12,fontWeight:700,letterSpacing:"0.1em",color:T.accent,marginBottom:20}}>CREATE PROJECT</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
             <div>
-              <label style={S.lbl}>PROJECT NAME *</label>
-              <input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Mobile App v2" style={S.inp}
-                onKeyDown={e=>e.key==="Enter"&&create()}/>
+              <label style={lbl(T)}>Project Name *</label>
+              <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="e.g. Mobile App v2" style={inp(T)} onKeyDown={e=>e.key==="Enter"&&create()}/>
             </div>
             <div>
-              <label style={S.lbl}>COLOR</label>
-              <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:4}}>
-                {PROJECT_COLORS.map(c=>(
-                  <div key={c} onClick={()=>setColor(c)} style={{width:28,height:28,borderRadius:"50%",background:c,cursor:"pointer",border:color===c?"3px solid #fff":"3px solid transparent",transition:"all .15s"}}/>
-                ))}
-              </div>
+              <label style={lbl(T)}>Description</label>
+              <input value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} placeholder="Brief description…" style={inp(T)}/>
             </div>
           </div>
-          <div style={{marginBottom:16}}>
-            <label style={S.lbl}>DESCRIPTION</label>
-            <input value={desc} onChange={e=>setDesc(e.target.value)} placeholder="Brief description…" style={S.inp}/>
+          <div style={{marginBottom:20}}>
+            <label style={lbl(T)}>Color</label>
+            <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:6}}>
+              {PROJ_COLORS.map(c=><div key={c} onClick={()=>setForm(f=>({...f,color:c}))} style={{width:32,height:32,borderRadius:8,background:c,cursor:"pointer",border:form.color===c?"3px solid #fff":"3px solid transparent",boxShadow:form.color===c?"0 0 0 2px "+c:"none",transition:"all .15s"}}/>)}
+            </div>
           </div>
-          <button onClick={create} disabled={busy} style={{...S.btn(), padding:"11px 24px", fontSize:13}}>
-            {busy?"CREATING…":"CREATE PROJECT"}
-          </button>
+          <div style={{display:"flex",gap:10}}>
+            <button onClick={create} disabled={busy} style={{...btn(T.accent,"#fff"),padding:"11px 24px",borderRadius:10}}>{busy?"Creating…":"Create Project"}</button>
+            <button onClick={()=>setShowCreate(false)} style={{...btn("transparent",T.textMuted),padding:"11px 24px",border:`1px solid ${T.border}`,borderRadius:10}}>Cancel</button>
+          </div>
         </div>
       )}
 
-      {/* Projects grid */}
-      {projects.length===0 ? (
-        <div style={{...S.card, textAlign:"center", padding:64, border:"1px dashed rgba(255,255,255,.06)"}}>
-          <div style={{fontSize:48,marginBottom:16,opacity:.2}}>🗂</div>
-          <div style={{fontSize:15,color:"#1e293b"}}>No projects yet</div>
-          <div style={{fontSize:12,color:"#0f172a",marginTop:6}}>Create your first project to get started</div>
-        </div>
-      ) : (
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:16}}>
-          {projects.map(p=>(
-            <ProjectCard key={p.id} project={p} onOpen={onOpen} onRefresh={onRefresh} toast$={toast$}/>
-          ))}
+      {loading&&<div style={{textAlign:"center",padding:80,color:T.textMuted,fontSize:14}}>Loading projects…</div>}
+
+      {!loading&&projects.length===0&&(
+        <div style={{...card(T),textAlign:"center",padding:80,border:`1px dashed ${T.border}`}}>
+          <div style={{fontSize:48,marginBottom:16,opacity:.3}}>🗂</div>
+          <div style={{fontSize:16,color:T.textMuted}}>{user.role==="admin"?"No projects yet. Create your first one!":"You haven't been added to any projects yet."}</div>
         </div>
       )}
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:20}}>
+        {projects.map(p=>(
+          <ProjectCard key={p.id} project={p} onOpen={openProject} onDelete={deleteProject} T={T} isAdmin={user.role==="admin"}/>
+        ))}
+      </div>
     </div>
   );
 }
 
-function ProjectCard({ project: p, onOpen, onRefresh, toast$ }) {
-  const [confirmDel, setConfirmDel] = useState(false);
-  const [deleting, setDeleting]     = useState(false);
-
-  const del = async () => {
-    setDeleting(true);
-    try {
-      await api.delete(`projects?id=eq.${p.id}`);
-      toast$("Project deleted."); onRefresh();
-    } catch(e) { toast$("Error: "+(e?.message||JSON.stringify(e)),"err"); setDeleting(false); }
-  };
-
-  return (
-    <div style={{...S.card, cursor:"default", borderLeft:`3px solid ${p.color||"#00ff88"}`, animation:"fadeIn .4s ease", position:"relative"}}>
-      <div style={{display:"flex",alignItems:"flex-start",gap:12,marginBottom:14}}>
-        <div style={{width:44,height:44,borderRadius:10,background:p.color||"#00ff88",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:900,color:"#070710",flexShrink:0}}>
+function ProjectCard({project:p,onOpen,onDelete,T,isAdmin}){
+  const [hov,setHov]=useState(false);
+  return(
+    <div style={{...card(T),borderLeft:`4px solid ${p.color||T.accent}`,cursor:"default",transition:"all .2s",transform:hov?"translateY(-2px)":"translateY(0)",boxShadow:hov?`0 8px 32px rgba(0,0,0,.2)`:T.shadow,animation:"fadeIn .4s ease"}}
+      onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:14,marginBottom:16}}>
+        <div style={{width:48,height:48,borderRadius:12,background:p.color||T.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:800,color:"#fff",flexShrink:0,letterSpacing:"-0.05em"}}>
           {initials(p.name)}
         </div>
         <div style={{flex:1,minWidth:0}}>
-          <div style={{fontSize:16,fontWeight:"bold",color:"#e2e8f0",marginBottom:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</div>
-          <div style={{fontSize:11,color:"#64748b",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.description||"No description"}</div>
+          <div style={{fontSize:17,fontWeight:700,color:T.text,marginBottom:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</div>
+          <div style={{fontSize:13,color:T.textMuted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.description||"No description"}</div>
         </div>
       </div>
-      <div style={{fontSize:10,color:"#334155",marginBottom:16,letterSpacing:"1px"}}>
-        Created {fmtDate(p.created_at,"Asia/Karachi")}
-      </div>
+      <div style={{fontSize:11,color:T.textDim,marginBottom:16}}>Created {fmtDate(p.created_at,"Asia/Karachi")}</div>
       <div style={{display:"flex",gap:8}}>
-        <button onClick={()=>onOpen(p)} style={{...S.btn(p.color||"#00ff88","#070710"), flex:1, padding:"10px", fontSize:12}}>
-          OPEN TRACKER →
+        <button onClick={()=>onOpen(p)}
+          style={{...btn(p.color||T.accent,"#fff"),flex:1,padding:"10px",borderRadius:10,boxShadow:`0 4px 12px ${p.color||T.accent}40`,fontSize:13}}>
+          Open Tracker →
         </button>
-        {!confirmDel ? (
-          <button onClick={()=>setConfirmDel(true)} style={{...S.btn("rgba(220,38,38,.12)","#dc2626"), padding:"10px 14px", border:"1px solid rgba(220,38,38,.2)", fontSize:11}}>
+        {isAdmin&&(
+          <button onClick={()=>onDelete(p.id)}
+            style={{...btn("rgba(220,38,38,.1)","#dc2626"),padding:"10px 14px",border:"1px solid rgba(220,38,38,.2)",borderRadius:10,fontSize:13}}>
             🗑
-          </button>
-        ) : (
-          <button onClick={del} disabled={deleting} style={{...S.btn("#dc2626","#fff"), padding:"10px 14px", fontSize:11}}>
-            {deleting?"…":"CONFIRM"}
           </button>
         )}
       </div>
@@ -396,238 +470,263 @@ function ProjectCard({ project: p, onOpen, onRefresh, toast$ }) {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// TRACKER PAGE  (per-project)
-// ═══════════════════════════════════════════════════════════════════════════════
-function TrackerPage({ project, sessions, onRefresh, toast$ }) {
-  const [view, setView]         = useState("clock");
-  const [devName, setDevName]   = useState("");
-  const [taskName, setTaskName] = useState("");
-  const [taskDesc, setTaskDesc] = useState("");
-  const [tz, setTz]             = useState("Asia/Karachi");
-  const [active, setActive]     = useState(null);
-  const [elapsed, setElapsed]   = useState(0);
-  const [busy, setBusy]         = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [filterDev, setFilterDev]   = useState("ALL");
-  const [filterStatus, setFilterStatus] = useState("ALL");
-  const [search, setSearch]     = useState("");
-  const [sortCol, setSortCol]   = useState("created_at");
-  const [sortDir, setSortDir]   = useState("desc");
-  const tickRef = useRef(null);
+// ══════════════════════════════════════════════════════════
+// TRACKER PAGE
+// ══════════════════════════════════════════════════════════
+function TrackerPage({project,toast$,T}){
+  const {user}=useAuth();
+  const [tab,setTab]=useState("clock");
+  const [sessions,setSessions]=useState([]);
+  const [members,setMembers]=useState([]);
+  const [allUsers,setAllUsers]=useState([]);
+  const [tasks,setTasks]=useState([]);
+  const [myActive,setMyActive]=useState(null);
+  const [elapsed,setElapsed]=useState(0);
+  const [busy,setBusy]=useState(false);
+  const [taskName,setTaskName]=useState("");
+  const [taskDesc,setTaskDesc]=useState("");
+  const [tz,setTz]=useState(user.timezone||"Asia/Karachi");
+  const [filterDev,setFilterDev]=useState("ALL");
+  const [filterStatus,setFilterStatus]=useState("ALL");
+  const [search,setSearch]=useState("");
+  const [sortCol,setSortCol]=useState("created_at");
+  const [sortDir,setSortDir]=useState("desc");
+  const tickRef=useRef(null);
+  const pc=project.color||T.accent;
 
-  const load = async (silent=false) => {
-    if (!silent) setRefreshing(true);
-    await onRefresh();
-    setRefreshing(false);
+  const loadAll=async()=>{
+    try{
+      const [sess,pm,users,tsk]=await Promise.all([
+        db.get(`time_sessions?project_id=eq.${project.id}&order=created_at.desc&limit=500`),
+        db.get(`project_members?project_id=eq.${project.id}`),
+        db.get("users?order=full_name.asc"),
+        db.get(`tasks?project_id=eq.${project.id}&order=created_at.desc`),
+      ]);
+      setSessions(sess);
+      setAllUsers(users);
+      const memberIds=new Set(pm.map(m=>m.user_id));
+      setMembers(users.filter(u=>memberIds.has(u.id)));
+      setTasks(tsk);
+      // find my active session
+      const active=sess.find(s=>s.user_id===user.id&&s.status==="active");
+      setMyActive(active||null);
+    }catch(e){toast$("Load error: "+e?.message,"err");}
   };
 
-  useEffect(() => { const id=setInterval(()=>onRefresh(),30000); return()=>clearInterval(id); },[]);
-  useEffect(() => {
-    if (active) { tickRef.current=setInterval(()=>setElapsed(Math.floor((Date.now()-new Date(active.start_time).getTime())/1000)),1000); }
-    else { clearInterval(tickRef.current); setElapsed(0); }
+  useEffect(()=>{loadAll();},[project.id]);
+  useEffect(()=>{const id=setInterval(loadAll,30000);return()=>clearInterval(id);},[project.id]);
+  useEffect(()=>{
+    if(myActive){tickRef.current=setInterval(()=>setElapsed(Math.floor((Date.now()-new Date(myActive.start_time).getTime())/1000)),1000);}
+    else{clearInterval(tickRef.current);setElapsed(0);}
     return()=>clearInterval(tickRef.current);
-  },[active]);
+  },[myActive]);
 
-  const startClock = async () => {
-    if (!devName.trim()) return toast$("Enter your name!","err");
-    if (!taskName.trim()) return toast$("Enter a task name!","err");
+  const startClock=async()=>{
+    if(myActive)return toast$("You already have an active session in this project. Stop it first.","err");
+    if(!taskName.trim())return toast$("Enter a task name","err");
     setBusy(true);
-    try {
-      const rows = await api.post("time_sessions",{developer_name:devName.trim(),task_name:taskName.trim(),task_description:taskDesc.trim()||null,timezone:tz,start_time:new Date().toISOString(),status:"active",project_id:project.id});
-      setActive(Array.isArray(rows)?rows[0]:rows);
-      toast$("⏱ Clock started!"); onRefresh();
-    } catch(e) { toast$("Error: "+(e?.message||JSON.stringify(e)),"err"); }
-    finally { setBusy(false); }
+    try{
+      const rows=await db.post("time_sessions",{project_id:project.id,user_id:user.id,developer_name:user.full_name,task_name:taskName.trim(),task_description:taskDesc.trim()||null,timezone:tz,start_time:new Date().toISOString(),status:"active"});
+      setMyActive(Array.isArray(rows)?rows[0]:rows);
+      toast$("⏱ Clock started!");setTaskName("");setTaskDesc("");loadAll();
+    }catch(e){toast$("Error: "+e?.message,"err");}
+    finally{setBusy(false);}
   };
 
-  const stopClock = async () => {
-    if (!active) return;
+  const stopClock=async()=>{
+    if(!myActive)return;
     setBusy(true);
-    const secs = Math.floor((Date.now()-new Date(active.start_time).getTime())/1000);
-    try {
-      await api.patch(`time_sessions?id=eq.${active.id}`,{end_time:new Date().toISOString(),duration_seconds:secs,status:"completed"});
-      setActive(null); setTaskName(""); setTaskDesc("");
-      toast$(`✅ ${hms(secs)} logged!`); onRefresh();
-    } catch(e) { toast$("Error: "+(e?.message||JSON.stringify(e)),"err"); }
-    finally { setBusy(false); }
+    const end=new Date().toISOString();
+    const secs=calcDuration(myActive.start_time,end);
+    try{
+      await db.patch(`time_sessions?id=eq.${myActive.id}`,{end_time:end,duration_seconds:secs,status:"completed"});
+      setMyActive(null);toast$(`✅ ${hms(secs)} logged!`);loadAll();
+    }catch(e){toast$("Error: "+e?.message,"err");}
+    finally{setBusy(false);}
   };
 
-  const uniqueDevs = [...new Set(sessions.map(s=>s.developer_name))].sort();
-  const totalSecs  = sessions.filter(s=>s.status==="completed").reduce((a,s)=>a+(s.duration_seconds||0),0);
-  const activeCnt  = sessions.filter(s=>s.status==="active").length;
+  const totalSecs=sessions.filter(s=>s.status==="completed").reduce((a,s)=>a+(s.duration_seconds||0),0);
+  const activeCnt=sessions.filter(s=>s.status==="active").length;
+  const uniqueDevs=[...new Set(sessions.map(s=>s.developer_name))].sort();
+  const tzMeta=TIMEZONES.find(t=>t.value===tz);
+  const myTasks=tasks.filter(t=>t.user_id===user.id);
 
-  let tableRows = sessions.filter(s=>{
-    if(filterDev!=="ALL"&&s.developer_name!==filterDev) return false;
-    if(filterStatus!=="ALL"&&s.status!==filterStatus) return false;
-    if(search){const q=search.toLowerCase();return s.developer_name?.toLowerCase().includes(q)||s.task_name?.toLowerCase().includes(q)||s.task_description?.toLowerCase().includes(q);}
+  let tableRows=sessions.filter(s=>{
+    if(filterDev!=="ALL"&&s.developer_name!==filterDev)return false;
+    if(filterStatus!=="ALL"&&s.status!==filterStatus)return false;
+    if(search){const q=search.toLowerCase();return s.developer_name?.toLowerCase().includes(q)||s.task_name?.toLowerCase().includes(q);}
     return true;
   });
-  tableRows=[...tableRows].sort((a,b)=>{
-    let av=a[sortCol]??0,bv=b[sortCol]??0;
-    return sortDir==="asc"?(av<bv?-1:av>bv?1:0):(av>bv?-1:av<bv?1:0);
-  });
+  tableRows=[...tableRows].sort((a,b)=>{let av=a[sortCol]??0,bv=b[sortCol]??0;return sortDir==="asc"?(av<bv?-1:av>bv?1:0):(av>bv?-1:av<bv?1:0);});
   const toggleSort=col=>{if(sortCol===col)setSortDir(d=>d==="asc"?"desc":"asc");else{setSortCol(col);setSortDir("desc");}};
-  const tzMeta = TIMEZONES.find(t=>t.value===tz);
-  const pc = project.color||"#00ff88";
-  const thSt=col=>({padding:"11px 14px",textAlign:"left",fontSize:10,letterSpacing:"1.5px",color:sortCol===col?pc:"#475569",whiteSpace:"nowrap",cursor:"pointer",userSelect:"none",background:"rgba(0,0,0,.25)",borderBottom:"1px solid rgba(255,255,255,.07)"});
 
-  return (
-    <div style={{animation:"fadeIn .4s ease"}}>
-      {/* Project header */}
-      <div style={{marginBottom:24,padding:"16px 20px",background:`${pc}10`,border:`1px solid ${pc}30`,borderRadius:14,display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
-        <div style={{width:48,height:48,borderRadius:10,background:pc,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:900,color:"#070710"}}>
+  const thS={padding:"11px 16px",textAlign:"left",fontSize:11,fontWeight:700,letterSpacing:"0.06em",color:T.textMuted,background:T.bgInput,borderBottom:`1px solid ${T.border}`,whiteSpace:"nowrap",cursor:"pointer",userSelect:"none"};
+
+  return(
+    <div style={{paddingTop:28,animation:"fadeIn .4s ease"}}>
+      {/* Project Hero */}
+      <div style={{...card(T),background:`linear-gradient(135deg,${pc}18,${pc}05)`,border:`1px solid ${pc}40`,marginBottom:28,display:"flex",alignItems:"center",gap:20,flexWrap:"wrap"}}>
+        <div style={{width:56,height:56,borderRadius:14,background:pc,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:800,color:"#fff",letterSpacing:"-0.05em",flexShrink:0}}>
           {initials(project.name)}
         </div>
-        <div>
-          <div style={{fontSize:18,fontWeight:900,color:"#fff"}}>{project.name}</div>
-          {project.description&&<div style={{fontSize:12,color:"#64748b",marginTop:2}}>{project.description}</div>}
+        <div style={{flex:1}}>
+          <h2 style={{margin:0,fontSize:"clamp(20px,3vw,28px)",fontWeight:800,color:T.text,letterSpacing:"-0.03em"}}>{project.name}</h2>
+          {project.description&&<div style={{fontSize:13,color:T.textMuted,marginTop:3}}>{project.description}</div>}
         </div>
-        <div style={{marginLeft:"auto",display:"flex",gap:16,flexWrap:"wrap"}}>
-          {[{l:"SESSIONS",v:sessions.length},{l:"HOURS",v:hms(totalSecs)},{l:"ACTIVE",v:activeCnt,red:activeCnt>0}].map(s=>(
+        <div style={{display:"flex",gap:24,flexWrap:"wrap"}}>
+          {[{l:"Sessions",v:sessions.length},{l:"Hours",v:hmLabel(totalSecs)||"0h"},{l:"Active",v:activeCnt,red:activeCnt>0},{l:"Members",v:members.length}].map(s=>(
             <div key={s.l} style={{textAlign:"center"}}>
-              <div style={{fontSize:18,fontWeight:900,color:s.red?"#dc2626":pc}}>{s.v}</div>
-              <div style={{fontSize:9,color:"#475569",letterSpacing:"2px"}}>{s.l}</div>
+              <div style={{fontSize:"clamp(20px,3vw,28px)",fontWeight:800,color:s.red?"#dc2626":pc,letterSpacing:"-0.05em"}}>{s.v}</div>
+              <div style={{fontSize:11,color:T.textMuted,fontWeight:600,letterSpacing:"0.06em",textTransform:"uppercase"}}>{s.l}</div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Nav */}
-      <div style={{display:"flex",gap:8,marginBottom:20,borderBottom:"1px solid rgba(255,255,255,.06)",paddingBottom:16,flexWrap:"wrap",alignItems:"center"}}>
-        {[{id:"clock",l:"⏱ CLOCK IN/OUT"},{id:"logs",l:"📋 SESSION LOG"},{id:"team",l:"👥 TEAM"}].map(t=>(
-          <button key={t.id} onClick={()=>setView(t.id)}
-            style={{padding:"9px 18px",borderRadius:8,border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:"bold",letterSpacing:"1px",background:view===t.id?pc:"rgba(255,255,255,.05)",color:view===t.id?"#070710":"#64748b",transition:"all .15s"}}>
+      {/* Tabs */}
+      <div style={{display:"flex",gap:6,marginBottom:24,background:T.bgInput,borderRadius:12,padding:4,width:"fit-content",flexWrap:"wrap"}}>
+        {[{id:"clock",l:"⏱ Clock"},{id:"logs",l:"📋 Sessions"},{id:"team",l:"👥 Team"},{id:"tasks",l:"✅ My Tasks"+(myTasks.length?` (${myTasks.length})`:"")}].map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)}
+            style={{...btn(tab===t.id?T.accent:"transparent",tab===t.id?"#fff":T.textMuted),padding:"8px 18px",borderRadius:9,fontSize:13,boxShadow:tab===t.id?"0 2px 8px rgba(99,102,241,.3)":"none"}}>
             {t.l}
           </button>
         ))}
-        <button onClick={()=>load()} style={{marginLeft:"auto",padding:"9px 14px",borderRadius:8,border:"1px solid rgba(255,255,255,.07)",background:"transparent",color:"#334155",cursor:"pointer",fontFamily:"inherit",fontSize:10}}>
-          {refreshing?"…":"↻"}
-        </button>
       </div>
 
-      {/* ── CLOCK ── */}
-      {view==="clock"&&(
+      {/* ── CLOCK TAB ── */}
+      {tab==="clock"&&(
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
-          <div style={S.card}>
-            <div style={{fontSize:10,letterSpacing:"3px",color:pc,marginBottom:20}}>DEVELOPER INFO</div>
-            {[{lbl:"YOUR NAME *",v:devName,set:setDevName,ph:"e.g. Ahmed Khan"},{lbl:"TASK / TICKET *",v:taskName,set:setTaskName,ph:"e.g. Fix auth bug"}].map(f=>(
-              <div key={f.lbl} style={{marginBottom:14}}>
-                <label style={S.lbl}>{f.lbl}</label>
-                <input value={f.v} onChange={e=>f.set(e.target.value)} placeholder={f.ph} disabled={!!active} style={S.inp}/>
+          <div style={card(T)}>
+            <div style={{fontSize:12,fontWeight:700,letterSpacing:"0.1em",color:pc,marginBottom:20}}>CLOCK IN / OUT</div>
+
+            {/* Developer — read-only with member list shown disabled */}
+            <div style={{marginBottom:16}}>
+              <label style={lbl(T)}>Developer</label>
+              <div style={{...inp(T),background:T.bgInput,opacity:.8,display:"flex",alignItems:"center",gap:10,cursor:"default"}}>
+                <div style={{width:26,height:26,borderRadius:"50%",background:aColor(user.full_name),display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,color:"#fff"}}>{initials(user.full_name)}</div>
+                <span style={{fontWeight:600}}>{user.full_name}</span>
+                <span style={{marginLeft:"auto",fontSize:11,color:T.accent,background:T.accentGlow,padding:"2px 8px",borderRadius:6}}>You</span>
               </div>
-            ))}
-            <div style={{marginBottom:14}}>
-              <label style={S.lbl}>DESCRIPTION</label>
-              <textarea value={taskDesc} onChange={e=>setTaskDesc(e.target.value)} placeholder="Brief notes…" disabled={!!active} style={{...S.inp,resize:"vertical",minHeight:64}}/>
+              {members.filter(m=>m.id!==user.id).length>0&&(
+                <div style={{marginTop:8,fontSize:11,color:T.textMuted}}>Also in this project: {members.filter(m=>m.id!==user.id).map(m=>m.full_name).join(", ")}</div>
+              )}
+            </div>
+
+            <div style={{marginBottom:16}}>
+              <label style={lbl(T)}>Task Name *</label>
+              <input value={taskName} onChange={e=>setTaskName(e.target.value)} placeholder="What are you working on?" disabled={!!myActive} style={inp(T)}/>
+            </div>
+            <div style={{marginBottom:16}}>
+              <label style={lbl(T)}>Description</label>
+              <textarea value={taskDesc} onChange={e=>setTaskDesc(e.target.value)} placeholder="Brief notes…" disabled={!!myActive} style={{...inp(T),resize:"vertical",minHeight:68}}/>
             </div>
             <div style={{marginBottom:20}}>
-              <label style={S.lbl}>YOUR TIMEZONE</label>
-              <select value={tz} onChange={e=>setTz(e.target.value)} disabled={!!active} style={{...S.inp,background:"#0d1117"}}>
+              <label style={lbl(T)}>Timezone</label>
+              <select value={tz} onChange={e=>setTz(e.target.value)} disabled={!!myActive} style={{...inp(T),background:T.bgInput}}>
                 {TIMEZONES.map(t=><option key={t.value} value={t.value}>{t.flag} {t.label}</option>)}
               </select>
             </div>
-            {!active?(
-              <button onClick={startClock} disabled={busy} style={{width:"100%",padding:14,background:busy?"#065f46":pc,color:"#070710",border:"none",borderRadius:10,fontFamily:"inherit",fontSize:14,fontWeight:900,letterSpacing:"2px",cursor:"pointer"}}>
-                {busy?"STARTING…":"▶   START CLOCK"}
+
+            {myActive?(
+              <button onClick={stopClock} disabled={busy}
+                style={{...btn("#dc2626","#fff"),width:"100%",padding:"14px",fontSize:15,fontWeight:700,borderRadius:12,animation:"glowRed 2s infinite"}}>
+                {busy?"Saving…":"⏹  Stop & Save Session"}
               </button>
             ):(
-              <button onClick={stopClock} disabled={busy} style={{width:"100%",padding:14,background:busy?"#7f1d1d":"#dc2626",color:"#fff",border:"none",borderRadius:10,fontFamily:"inherit",fontSize:14,fontWeight:900,letterSpacing:"2px",cursor:"pointer",animation:"glowRed 2s infinite"}}>
-                {busy?"SAVING…":"⏹   STOP & SAVE"}
+              <button onClick={startClock} disabled={busy}
+                style={{...btn(pc,"#fff"),width:"100%",padding:"14px",fontSize:15,fontWeight:700,borderRadius:12,boxShadow:`0 6px 20px ${pc}50`}}>
+                {busy?"Starting…":"▶  Start Clock"}
               </button>
             )}
           </div>
 
           <div style={{display:"flex",flexDirection:"column",gap:16}}>
-            <div style={{...S.card,background:`${pc}08`,border:`1px solid ${pc}25`,textAlign:"center"}}>
-              <div style={{fontSize:10,letterSpacing:"3px",color:pc,marginBottom:8}}>{tzMeta?.flag} {tzMeta?.label?.toUpperCase()}</div>
-              <div style={{fontSize:"clamp(13px,2vw,15px)",fontWeight:"bold"}}><LiveClock tz={tz}/></div>
+            <div style={{...card(T),background:`${pc}0d`,border:`1px solid ${pc}30`,textAlign:"center"}}>
+              <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.1em",color:pc,marginBottom:6}}>{tzMeta?.flag} {tzMeta?.label?.toUpperCase()}</div>
+              <div style={{fontSize:"clamp(13px,2vw,16px)",fontWeight:600,color:T.text,fontFamily:"JetBrains Mono,monospace"}}><LiveClock tz={tz}/></div>
             </div>
-            {active?(
-              <div style={{...S.card,background:"rgba(220,38,38,.05)",border:"1px solid rgba(220,38,38,.25)",flex:1}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:18}}>
+
+            {myActive?(
+              <div style={{...card(T),background:"rgba(220,38,38,.05)",border:"1px solid rgba(220,38,38,.2)",flex:1}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
                   <span style={{width:8,height:8,background:"#dc2626",borderRadius:"50%",display:"inline-block",animation:"pulse 1s infinite"}}/>
-                  <span style={{fontSize:10,letterSpacing:"3px",color:"#dc2626"}}>RECORDING</span>
+                  <span style={{fontSize:11,fontWeight:700,letterSpacing:"0.1em",color:"#dc2626"}}>RECORDING</span>
                 </div>
-                <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
-                  <div style={{width:44,height:44,borderRadius:"50%",background:aColor(active.developer_name),display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,color:"#070710"}}>
-                    {initials(active.developer_name)}
-                  </div>
+                <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+                  <div style={{width:44,height:44,borderRadius:"50%",background:aColor(user.full_name),display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:800,color:"#fff"}}>{initials(user.full_name)}</div>
                   <div>
-                    <div style={{fontSize:17,fontWeight:"bold"}}>{active.developer_name}</div>
-                    <div style={{fontSize:12,color:"#94a3b8"}}>{active.task_name}</div>
+                    <div style={{fontSize:16,fontWeight:700,color:T.text}}>{user.full_name}</div>
+                    <div style={{fontSize:12,color:T.textMuted}}>{myActive.task_name}</div>
                   </div>
                 </div>
-                <div style={{fontSize:10,color:"#64748b",letterSpacing:"2px",marginBottom:4}}>ELAPSED</div>
-                <div style={{fontSize:"clamp(30px,6vw,46px)",fontWeight:900,color:"#dc2626",fontVariantNumeric:"tabular-nums",letterSpacing:"-1px"}}>{hms(elapsed)}</div>
+                <div style={{fontSize:11,color:T.textMuted,letterSpacing:"0.06em",marginBottom:4}}>ELAPSED TIME</div>
+                <div style={{fontSize:"clamp(32px,6vw,52px)",fontWeight:900,color:"#dc2626",fontFamily:"JetBrains Mono,monospace",letterSpacing:"-0.04em"}}>{hms(elapsed)}</div>
               </div>
             ):(
-              <div style={{...S.card,border:"1px dashed rgba(255,255,255,.06)",flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",gap:10}}>
-                <div style={{fontSize:48,opacity:.1}}>⏰</div>
-                <div style={{fontSize:13,color:"#1e293b"}}>No active session</div>
+              <div style={{...card(T),border:`1px dashed ${T.border}`,flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",gap:10}}>
+                <div style={{fontSize:48,opacity:.15}}>⏰</div>
+                <div style={{fontSize:14,color:T.textMuted}}>No active session</div>
+                <div style={{fontSize:12,color:T.textDim}}>Enter a task and start the clock</div>
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* ── LOGS ── */}
-      {view==="logs"&&(
+      {/* ── LOGS TAB ── */}
+      {tab==="logs"&&(
         <div>
-          <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap",alignItems:"center"}}>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Search…" style={{...S.inp,width:"auto",flex:"1 1 180px",fontSize:12}}/>
-            <select value={filterDev} onChange={e=>setFilterDev(e.target.value)} style={{...S.inp,width:"auto",background:"#0d1117",fontSize:12}}>
+          <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Search developer or task…" style={{...inp(T),width:"auto",flex:"1 1 200px",fontSize:13}}/>
+            <select value={filterDev} onChange={e=>setFilterDev(e.target.value)} style={{...inp(T),width:"auto",fontSize:13}}>
               <option value="ALL">All Developers</option>
               {uniqueDevs.map(d=><option key={d} value={d}>{d}</option>)}
             </select>
-            <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} style={{...S.inp,width:"auto",background:"#0d1117",fontSize:12}}>
+            <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} style={{...inp(T),width:"auto",fontSize:13}}>
               <option value="ALL">All Status</option>
               <option value="completed">Completed</option>
               <option value="active">Active</option>
             </select>
           </div>
-          <div style={{fontSize:11,color:"#334155",marginBottom:10}}>SHOWING {tableRows.length} / {sessions.length} RECORDS</div>
-          <div style={{overflowX:"auto",borderRadius:14,border:"1px solid rgba(255,255,255,.07)"}}>
-            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:960}}>
+          <div style={{fontSize:12,color:T.textMuted,marginBottom:10,fontWeight:600}}>{tableRows.length} / {sessions.length} RECORDS</div>
+          <div style={{overflowX:"auto",borderRadius:14,border:`1px solid ${T.border}`}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,minWidth:900}}>
               <thead>
                 <tr>
-                  {[{col:"developer_name",lbl:"DEVELOPER"},{col:"task_name",lbl:"TASK"},{col:"task_description",lbl:"DESCRIPTION"},{col:"timezone",lbl:"TZ"},{col:"start_time",lbl:"DATE"},{col:"start_time",lbl:"START",id:"st"},{col:"end_time",lbl:"END"},{col:"duration_seconds",lbl:"HOURS"},{col:"status",lbl:"STATUS"}].map(h=>(
-                    <th key={h.id||h.col+h.lbl} onClick={()=>toggleSort(h.col)} style={thSt(h.col)}>
-                      {h.lbl} {sortCol===h.col&&<span style={{color:pc}}>{sortDir==="asc"?"↑":"↓"}</span>}
+                  {[{col:"developer_name",l:"Developer"},{col:"task_name",l:"Task"},{col:"task_description",l:"Description"},{col:"start_time",l:"Date"},{col:"start_time",l:"Start",id:"st"},{col:"end_time",l:"End"},{col:"duration_seconds",l:"Duration"},{col:"status",l:"Status"}].map(h=>(
+                    <th key={h.id||h.col+h.l} onClick={()=>toggleSort(h.col)} style={{...thS,color:sortCol===h.col?pc:T.textMuted}}>
+                      {h.l} {sortCol===h.col&&<span>{sortDir==="asc"?"↑":"↓"}</span>}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {tableRows.length===0&&<tr><td colSpan={9} style={{padding:48,textAlign:"center",color:"#1e293b",fontSize:13}}>{refreshing?"Loading…":"No sessions yet."}</td></tr>}
+                {tableRows.length===0&&<tr><td colSpan={8} style={{padding:48,textAlign:"center",color:T.textMuted,fontSize:13}}>No sessions yet.</td></tr>}
                 {tableRows.map((s,i)=>{
                   const live=s.status==="active"?Math.floor((Date.now()-new Date(s.start_time).getTime())/1000):null;
-                  const bg=i%2===0?"rgba(255,255,255,.015)":"transparent";
+                  const bg=i%2===0?T.bgInput:"transparent";
                   return(
-                    <tr key={s.id} style={{borderBottom:"1px solid rgba(255,255,255,.04)",background:bg}}
-                      onMouseEnter={e=>e.currentTarget.style.background=`${pc}08`}
+                    <tr key={s.id} style={{background:bg,borderBottom:`1px solid ${T.border}`}}
+                      onMouseEnter={e=>e.currentTarget.style.background=`${pc}0a`}
                       onMouseLeave={e=>e.currentTarget.style.background=bg}>
-                      <td style={{padding:"12px 14px",whiteSpace:"nowrap"}}>
+                      <td style={{padding:"12px 16px",whiteSpace:"nowrap"}}>
                         <div style={{display:"flex",alignItems:"center",gap:10}}>
-                          <div style={{width:30,height:30,borderRadius:"50%",background:aColor(s.developer_name),display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:900,color:"#070710"}}>{initials(s.developer_name)}</div>
-                          <span style={{fontWeight:"bold",color:"#e2e8f0"}}>{s.developer_name}</span>
+                          <div style={{width:30,height:30,borderRadius:"50%",background:aColor(s.developer_name),display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,color:"#fff"}}>{initials(s.developer_name)}</div>
+                          <span style={{fontWeight:600,color:T.text}}>{s.developer_name}</span>
                         </div>
                       </td>
-                      <td style={{padding:"12px 14px",maxWidth:160}}><span style={{fontWeight:600,color:"#e2e8f0",wordBreak:"break-word"}}>{s.task_name}</span></td>
-                      <td style={{padding:"12px 14px",maxWidth:180,fontSize:11,color:"#64748b",wordBreak:"break-word"}}>{s.task_description||"—"}</td>
-                      <td style={{padding:"12px 14px",fontSize:11,color:"#64748b",whiteSpace:"nowrap"}}>{TIMEZONES.find(t=>t.value===s.timezone)?.flag||"🌍"} {(s.timezone||"").split("/")[1]||s.timezone}</td>
-                      <td style={{padding:"12px 14px",fontSize:11,color:"#94a3b8",whiteSpace:"nowrap"}}>{fmtDate(s.start_time,s.timezone)}</td>
-                      <td style={{padding:"12px 14px",fontSize:11,color:"#94a3b8",whiteSpace:"nowrap"}}>{fmtTime(s.start_time,s.timezone)}</td>
-                      <td style={{padding:"12px 14px",fontSize:11,color:s.end_time?"#94a3b8":"#1e293b",whiteSpace:"nowrap"}}>{s.end_time?fmtTime(s.end_time,s.timezone):"—"}</td>
-                      <td style={{padding:"12px 14px",whiteSpace:"nowrap"}}>
-                        <div style={{fontWeight:"bold",fontVariantNumeric:"tabular-nums",color:s.status==="active"?"#dc2626":pc,fontSize:13}}>
-                          {s.status==="active"?<span style={{animation:"pulse 2s infinite",display:"inline-block"}}>⏱ {hms(live)}</span>:hms(s.duration_seconds)}
-                        </div>
-                        {s.status==="completed"&&s.duration_seconds!=null&&<div style={{fontSize:10,color:"#334155",marginTop:2}}>{hmLabel(s.duration_seconds)}</div>}
+                      <td style={{padding:"12px 16px",maxWidth:160,fontWeight:500,color:T.text,wordBreak:"break-word"}}>{s.task_name}</td>
+                      <td style={{padding:"12px 16px",maxWidth:180,fontSize:12,color:T.textMuted,wordBreak:"break-word"}}>{s.task_description||"—"}</td>
+                      <td style={{padding:"12px 16px",fontSize:12,color:T.textMuted,whiteSpace:"nowrap"}}>{fmtDate(s.start_time,s.timezone)}</td>
+                      <td style={{padding:"12px 16px",fontSize:12,color:T.textMuted,whiteSpace:"nowrap",fontFamily:"JetBrains Mono,monospace"}}>{fmtTime(s.start_time,s.timezone)}</td>
+                      <td style={{padding:"12px 16px",fontSize:12,color:T.textMuted,whiteSpace:"nowrap",fontFamily:"JetBrains Mono,monospace"}}>{s.end_time?fmtTime(s.end_time,s.timezone):"—"}</td>
+                      <td style={{padding:"12px 16px",fontWeight:700,color:s.status==="active"?"#dc2626":pc,fontFamily:"JetBrains Mono,monospace",whiteSpace:"nowrap"}}>
+                        {s.status==="active"?<span style={{animation:"pulse 2s infinite",display:"inline-block"}}>⏱ {hms(live)}</span>:hms(s.duration_seconds)}
+                        {s.status==="completed"&&s.duration_seconds&&<div style={{fontSize:11,color:T.textDim,fontWeight:400,fontFamily:"Inter,sans-serif"}}>{hmLabel(s.duration_seconds)}</div>}
                       </td>
-                      <td style={{padding:"12px 14px"}}>
-                        <span style={{padding:"3px 10px",borderRadius:20,fontSize:9,fontWeight:"bold",letterSpacing:"1px",background:s.status==="active"?"rgba(220,38,38,.15)":`${pc}18`,color:s.status==="active"?"#dc2626":pc,border:`1px solid ${s.status==="active"?"rgba(220,38,38,.3)":pc+"40"}`}}>
-                          {s.status==="active"?"🔴 ACTIVE":"✅ DONE"}
+                      <td style={{padding:"12px 16px"}}>
+                        <span style={{padding:"4px 10px",borderRadius:20,fontSize:11,fontWeight:700,background:s.status==="active"?"rgba(220,38,38,.15)":`${pc}20`,color:s.status==="active"?"#dc2626":pc,border:`1px solid ${s.status==="active"?"rgba(220,38,38,.3)":pc+"40"}`}}>
+                          {s.status==="active"?"● Active":"✓ Done"}
                         </span>
                       </td>
                     </tr>
@@ -636,55 +735,52 @@ function TrackerPage({ project, sessions, onRefresh, toast$ }) {
               </tbody>
             </table>
           </div>
-          {tableRows.length>0&&(
-            <div style={{display:"flex",gap:20,marginTop:12,fontSize:11,color:"#475569",justifyContent:"flex-end"}}>
-              <span>TOTAL: <strong style={{color:pc}}>{hms(tableRows.filter(s=>s.status==="completed").reduce((a,s)=>a+(s.duration_seconds||0),0))}</strong></span>
-            </div>
-          )}
         </div>
       )}
 
-      {/* ── TEAM ── */}
-      {view==="team"&&(
+      {/* ── TEAM TAB ── */}
+      {tab==="team"&&(
         <div>
-          {uniqueDevs.length===0?(
-            <div style={{...S.card,textAlign:"center",color:"#1e293b",padding:48}}>No team data yet.</div>
+          {members.length===0?(
+            <div style={{...card(T),textAlign:"center",padding:64,color:T.textMuted}}>No team members in this project yet.</div>
           ):(
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:14}}>
-              {uniqueDevs.map(d=>{
-                const mine=sessions.filter(s=>s.developer_name===d);
-                const secs=mine.filter(s=>s.status==="completed").reduce((a,s)=>a+(s.duration_seconds||0),0);
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:18}}>
+              {members.map(m=>{
+                const ms=sessions.filter(s=>s.user_id===m.id);
+                const secs=ms.filter(s=>s.status==="completed").reduce((a,s)=>a+(s.duration_seconds||0),0);
+                const online=ms.some(s=>s.status==="active");
                 const pct=totalSecs>0?Math.round((secs/totalSecs)*100):0;
-                const online=mine.some(s=>s.status==="active");
-                const tasks=[...new Set(mine.map(s=>s.task_name))].slice(0,3);
+                const tlist=[...new Set(ms.map(s=>s.task_name))].slice(0,3);
                 return(
-                  <div key={d} style={{...S.card,border:online?"1px solid rgba(220,38,38,.3)":S.card.border,boxShadow:online?"0 0 20px rgba(220,38,38,.08)":"none"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
-                      <div style={{width:44,height:44,borderRadius:"50%",background:aColor(d),display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,color:"#070710",position:"relative"}}>
-                        {initials(d)}
-                        {online&&<div style={{position:"absolute",bottom:0,right:0,width:11,height:11,background:"#dc2626",borderRadius:"50%",border:"2px solid #070710",animation:"pulse 1s infinite"}}/>}
+                  <div key={m.id} style={{...card(T),border:online?"1px solid rgba(220,38,38,.3)":card(T).border,boxShadow:online?"0 0 20px rgba(220,38,38,.08)":T.shadow}}>
+                    <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:14}}>
+                      <div style={{width:48,height:48,borderRadius:"50%",background:aColor(m.full_name),display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:800,color:"#fff",position:"relative"}}>
+                        {initials(m.full_name)}
+                        {online&&<div style={{position:"absolute",bottom:0,right:0,width:12,height:12,background:"#dc2626",borderRadius:"50%",border:`2px solid ${T.bgCard}`,animation:"pulse 1s infinite"}}/>}
                       </div>
                       <div>
-                        <div style={{fontSize:14,fontWeight:"bold",color:"#e2e8f0"}}>{d}</div>
-                        <div style={{fontSize:11,color:online?"#dc2626":"#64748b"}}>{online?"🔴 Active":"Offline"}</div>
+                        <div style={{fontSize:16,fontWeight:700,color:T.text}}>{m.full_name}</div>
+                        <div style={{fontSize:12,color:online?"#dc2626":T.textMuted}}>{online?"● Recording now":"Offline"}</div>
                       </div>
                       <div style={{marginLeft:"auto",textAlign:"right"}}>
-                        <div style={{fontSize:13,color:pc,fontWeight:"bold"}}>{pct}%</div>
+                        <div style={{fontSize:16,fontWeight:800,color:pc}}>{pct}%</div>
+                        <div style={{fontSize:10,color:T.textMuted,fontWeight:600}}>OF TOTAL</div>
                       </div>
                     </div>
-                    <div style={{height:3,background:"rgba(255,255,255,.06)",borderRadius:2,marginBottom:14,overflow:"hidden"}}>
-                      <div style={{height:"100%",width:`${pct}%`,background:pc,borderRadius:2}}/>
+                    <div style={{height:4,background:T.bgInput,borderRadius:2,marginBottom:14,overflow:"hidden"}}>
+                      <div style={{height:"100%",width:`${pct}%`,background:pc,borderRadius:2,transition:"width .5s ease"}}/>
                     </div>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
-                      {[{l:"SESSIONS",v:mine.length},{l:"HOURS",v:hms(secs)}].map(st=>(
-                        <div key={st.l} style={{background:"rgba(255,255,255,.03)",borderRadius:8,padding:"8px 10px"}}>
-                          <div style={{fontSize:14,fontWeight:900,color:"#e2e8f0"}}>{st.v}</div>
-                          <div style={{fontSize:9,color:"#475569",letterSpacing:"1px"}}>{st.l}</div>
+                      {[{l:"Sessions",v:ms.length},{l:"Hours",v:hmLabel(secs)||"0h"}].map(s=>(
+                        <div key={s.l} style={{background:T.bgInput,borderRadius:10,padding:"10px 12px"}}>
+                          <div style={{fontSize:18,fontWeight:800,color:T.text}}>{s.v}</div>
+                          <div style={{fontSize:10,color:T.textMuted,fontWeight:600,letterSpacing:"0.06em"}}>{s.l.toUpperCase()}</div>
                         </div>
                       ))}
                     </div>
-                    <div style={{fontSize:9,color:"#475569",letterSpacing:"1.5px",marginBottom:5}}>RECENT TASKS</div>
-                    {tasks.map((t,ti)=><div key={ti} style={{fontSize:11,color:"#64748b",padding:"3px 0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",borderBottom:ti<tasks.length-1?"1px solid rgba(255,255,255,.04)":"none"}}>· {t}</div>)}
+                    <div style={{fontSize:11,color:T.textMuted,fontWeight:700,letterSpacing:"0.06em",marginBottom:6}}>RECENT TASKS</div>
+                    {tlist.length===0&&<div style={{fontSize:12,color:T.textDim}}>No sessions yet</div>}
+                    {tlist.map((t,i)=><div key={i} style={{fontSize:12,color:T.textMuted,padding:"3px 0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",borderBottom:i<tlist.length-1?`1px solid ${T.border}`:"none"}}>· {t}</div>)}
                   </div>
                 );
               })}
@@ -692,472 +788,750 @@ function TrackerPage({ project, sessions, onRefresh, toast$ }) {
           )}
         </div>
       )}
+
+      {/* ── MY TASKS TAB ── */}
+      {tab==="tasks"&&(
+        <MyTasksPanel tasks={myTasks} user={user} project={project} onRefresh={loadAll} toast$={toast$} T={T}/>
+      )}
     </div>
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// ADMIN LOGIN
-// ═══════════════════════════════════════════════════════════════════════════════
-function AdminLogin({ onSuccess, toast$ }) {
-  const [u, setU] = useState("");
-  const [p, setP] = useState("");
-  const [show, setShow] = useState(false);
+// ── My Tasks Panel (member view) ──
+function MyTasksPanel({tasks,user,project,onRefresh,toast$,T}){
+  const [editTask,setEditTask]=useState(null);
+  const pc=project.color||T.accent;
 
-  const login = () => {
-    if (u === ADMIN_USER && p === ADMIN_PASS) { onSuccess(); }
-    else toast$("Invalid username or password","err");
+  const updateTask=async(id,patch)=>{
+    try{
+      await db.patch(`tasks?id=eq.${id}`,{...patch,updated_at:new Date().toISOString()});
+      toast$("✅ Task updated!");onRefresh();setEditTask(null);
+    }catch(e){toast$("Error: "+e?.message,"err");}
   };
 
-  return (
-    <div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"60vh",animation:"fadeIn .4s ease"}}>
-      <div style={{width:"100%",maxWidth:420}}>
-        <div style={{...S.card,border:"1px solid rgba(99,102,241,.25)"}}>
-          <div style={{textAlign:"center",marginBottom:28}}>
-            <div style={{fontSize:32,marginBottom:8}}>🔐</div>
-            <div style={{fontSize:10,letterSpacing:"4px",color:"#6366f1",marginBottom:4}}>TENSORFOLD.AI</div>
-            <div style={{fontSize:20,fontWeight:900,color:"#fff"}}>Admin Panel</div>
-            <div style={{fontSize:11,color:"#475569",marginTop:4}}>Enter credentials to continue</div>
-          </div>
-          <div style={{marginBottom:14}}>
-            <label style={S.lbl}>USERNAME</label>
-            <input value={u} onChange={e=>setU(e.target.value)} placeholder="Username" style={S.inp} onKeyDown={e=>e.key==="Enter"&&login()}/>
-          </div>
-          <div style={{marginBottom:20}}>
-            <label style={S.lbl}>PASSWORD</label>
-            <div style={{position:"relative"}}>
-              <input type={show?"text":"password"} value={p} onChange={e=>setP(e.target.value)} placeholder="Password" style={S.inp} onKeyDown={e=>e.key==="Enter"&&login()}/>
-              <button onClick={()=>setShow(v=>!v)} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:12}}>{show?"HIDE":"SHOW"}</button>
+  if(tasks.length===0)return(
+    <div style={{...card(T),textAlign:"center",padding:72,color:T.textMuted}}>
+      <div style={{fontSize:40,marginBottom:14,opacity:.3}}>✅</div>
+      <div style={{fontSize:15,fontWeight:500}}>No tasks assigned to you in this project.</div>
+      <div style={{fontSize:13,marginTop:8,color:T.textDim}}>Your admin will assign tasks here.</div>
+    </div>
+  );
+
+  return(
+    <div>
+      {editTask&&(
+        <Modal T={T} onClose={()=>setEditTask(null)} width={560}>
+          <MemberTaskEditForm task={editTask} onSave={d=>updateTask(editTask.id,d)} onClose={()=>setEditTask(null)} T={T}/>
+        </Modal>
+      )}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:16}}>
+        {tasks.map(t=>{
+          const pr=PRIO_MAP[t.priority]||PRIO_MAP.medium;
+          const st=STATUS_MAP[t.status]||STATUS_MAP.pending;
+          const overdue=t.deadline&&t.status!=="completed"&&new Date(t.deadline)<new Date();
+          return(
+            <div key={t.id} style={{...card(T),borderLeft:`4px solid ${st.c}`,animation:"fadeIn .4s ease"}}>
+              <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8,marginBottom:10}}>
+                <div style={{fontSize:15,fontWeight:700,color:T.text,lineHeight:1.3}}>{t.title}</div>
+                <span style={{padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:700,background:st.bg,color:st.c,whiteSpace:"nowrap",flexShrink:0}}>{st.label}</span>
+              </div>
+              {t.description&&<div style={{fontSize:13,color:T.textMuted,marginBottom:10,lineHeight:1.5}}>{t.description}</div>}
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+                <span style={{padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:700,background:pr.bg,color:pr.c}}>{pr.label}</span>
+                {t.deadline&&<span style={{padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:600,background:overdue?"rgba(220,38,38,.12)":T.bgInput,color:overdue?"#dc2626":T.textMuted}}>📅 {t.deadline}{overdue?" (Overdue)":""}</span>}
+              </div>
+              {t.member_notes&&<div style={{fontSize:12,color:T.textMuted,background:T.bgInput,borderRadius:8,padding:"8px 12px",marginBottom:12,fontStyle:"italic"}}>"{t.member_notes}"</div>}
+              {t.notes&&<div style={{fontSize:12,color:T.accent,marginBottom:12}}>📌 Admin note: {t.notes}</div>}
+              <button onClick={()=>setEditTask(t)} style={{...btn(T.accent,"#fff"),padding:"8px 18px",borderRadius:8,fontSize:12,boxShadow:`0 3px 10px ${T.accent}30`}}>
+                Update Status / Notes →
+              </button>
             </div>
-          </div>
-          <button onClick={login} style={{...S.btn("#6366f1","#fff"),width:"100%",padding:13,fontSize:14,letterSpacing:"2px"}}>
-            LOGIN →
-          </button>
-        </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// ADMIN PAGE — full manual CRUD
-// ═══════════════════════════════════════════════════════════════════════════════
-function AdminPage({ projects, sessions: propSessions, onRefreshProjects, onRefreshSessions, toast$ }) {
-  const [tab, setTab]         = useState("sessions"); // sessions | projects
-  const [sessions, setSessions] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [editRow, setEditRow] = useState(null);   // session being edited
-  const [editProj, setEditProj] = useState(null); // project being edited
-  const [showAddSession, setShowAddSession] = useState(false);
-  const [showAddProject, setShowAddProject] = useState(false);
-  const [delConfirm, setDelConfirm] = useState(null);
-  const [filterProjId, setFilterProjId] = useState("ALL");
-  const [searchQ, setSearchQ] = useState("");
+function MemberTaskEditForm({task,onSave,onClose,T}){
+  const [status,setStatus]=useState(task.status||"pending");
+  const [notes,setNotes]=useState(task.member_notes||"");
+  return(
+    <div>
+      <div style={{fontSize:12,fontWeight:700,letterSpacing:"0.1em",color:T.accent,marginBottom:16}}>UPDATE TASK</div>
+      <div style={{fontSize:16,fontWeight:700,color:T.text,marginBottom:4}}>{task.title}</div>
+      {task.description&&<div style={{fontSize:13,color:T.textMuted,marginBottom:16}}>{task.description}</div>}
+      <div style={{marginBottom:16}}>
+        <label style={lbl(T)}>Your Status</label>
+        <select value={status} onChange={e=>setStatus(e.target.value)} style={{...inp(T)}}>
+          {Object.entries(STATUS_MAP).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+        </select>
+      </div>
+      <div style={{marginBottom:20}}>
+        <label style={lbl(T)}>Notes / Progress Update</label>
+        <textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="What did you do? Any blockers?" style={{...inp(T),resize:"vertical",minHeight:90,lineHeight:1.5}}/>
+      </div>
+      <div style={{display:"flex",gap:10}}>
+        <button onClick={()=>onSave({status,member_notes:notes})} style={{...btn(T.accent,"#fff"),padding:"10px 22px",borderRadius:10}}>Save Update</button>
+        <button onClick={onClose} style={{...btn("transparent",T.textMuted),padding:"10px 22px",border:`1px solid ${T.border}`,borderRadius:10}}>Cancel</button>
+      </div>
+    </div>
+  );
+}
 
-  const loadAll = async () => {
-    setLoading(true);
-    try { setSessions(await api.get("time_sessions?order=created_at.desc&limit=1000")); }
-    catch(e) { toast$("Load error: "+e?.message,"err"); }
-    finally { setLoading(false); }
+// ══════════════════════════════════════════════════════════
+// ADMIN PAGE
+// ══════════════════════════════════════════════════════════
+function AdminPage({toast$,T}){
+  const [tab,setTab]=useState("members");
+  const [projects,setProjects]=useState([]);
+  const [users,setUsers]=useState([]);
+  const [sessions,setSessions]=useState([]);
+  const [tasks,setTasks]=useState([]);
+  const [pmLinks,setPmLinks]=useState([]);
+  const {user:me}=useAuth();
+
+  const loadAll=async()=>{
+    try{
+      const [p,u,s,t,pm]=await Promise.all([
+        db.get("projects?order=created_at.asc"),
+        db.get("users?order=full_name.asc"),
+        db.get("time_sessions?order=created_at.desc&limit=500"),
+        db.get("tasks?order=created_at.desc"),
+        db.get("project_members"),
+      ]);
+      setProjects(p);setUsers(u);setSessions(s);setTasks(t);setPmLinks(pm);
+    }catch(e){toast$("Load error: "+e?.message,"err");}
   };
-  useEffect(()=>{ loadAll(); },[]);
+  useEffect(()=>{loadAll();},[]);
 
-  const deleteSession = async (id) => {
-    try { await api.delete(`time_sessions?id=eq.${id}`); toast$("Session deleted."); loadAll(); setDelConfirm(null); }
-    catch(e) { toast$("Delete error: "+e?.message,"err"); }
-  };
-  const deleteProject = async (id) => {
-    try { await api.delete(`projects?id=eq.${id}`); toast$("Project deleted."); onRefreshProjects(); setDelConfirm(null); }
-    catch(e) { toast$("Delete error: "+e?.message,"err"); }
-  };
+  const tabs=[{id:"members",l:"👤 Members"},{id:"projects",l:"🗂 Projects"},{id:"sessions",l:"📋 Sessions"},{id:"tasks",l:"✅ Tasks"},{id:"account",l:"🔑 My Account"}];
 
-  const filteredSessions = sessions.filter(s=>{
-    if(filterProjId!=="ALL"&&s.project_id!==filterProjId) return false;
-    if(searchQ){const q=searchQ.toLowerCase();return s.developer_name?.toLowerCase().includes(q)||s.task_name?.toLowerCase().includes(q);}
-    return true;
-  });
-
-  const ac = "#6366f1"; // admin colour
-  const thA = {padding:"10px 14px",textAlign:"left",fontSize:10,letterSpacing:"1.5px",color:"#475569",background:"rgba(0,0,0,.25)",borderBottom:"1px solid rgba(255,255,255,.07)",whiteSpace:"nowrap"};
-
-  return (
-    <div style={{animation:"fadeIn .4s ease"}}>
-      {/* Admin header */}
-      <div style={{marginBottom:24,padding:"16px 20px",background:"rgba(99,102,241,.08)",border:"1px solid rgba(99,102,241,.25)",borderRadius:14,display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
-        <div style={{fontSize:28}}>⚙</div>
+  return(
+    <div style={{paddingTop:28,animation:"fadeIn .4s ease"}}>
+      <div style={{marginBottom:28,padding:"20px 24px",background:"rgba(99,102,241,.08)",border:"1px solid rgba(99,102,241,.2)",borderRadius:16,display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+        <div style={{fontSize:32}}>⚙</div>
         <div>
-          <div style={{fontSize:18,fontWeight:900,color:"#fff"}}>Admin Panel</div>
-          <div style={{fontSize:11,color:"#6366f1",letterSpacing:"1px"}}>FULL DATABASE CONTROL · TENSORFOLD.AI</div>
+          <div style={{fontSize:20,fontWeight:800,color:T.text,letterSpacing:"-0.03em"}}>Admin Panel</div>
+          <div style={{fontSize:12,color:T.accent,fontWeight:600,letterSpacing:"0.08em"}}>TENSORFOLD.AI · FULL DATABASE CONTROL</div>
         </div>
-        <div style={{marginLeft:"auto",display:"flex",gap:10}}>
-          <div style={{textAlign:"center"}}>
-            <div style={{fontSize:20,fontWeight:900,color:ac}}>{sessions.length}</div>
-            <div style={{fontSize:9,color:"#475569",letterSpacing:"1px"}}>SESSIONS</div>
-          </div>
-          <div style={{textAlign:"center",marginLeft:16}}>
-            <div style={{fontSize:20,fontWeight:900,color:ac}}>{projects.length}</div>
-            <div style={{fontSize:9,color:"#475569",letterSpacing:"1px"}}>PROJECTS</div>
-          </div>
+        <div style={{marginLeft:"auto",display:"flex",gap:20,flexWrap:"wrap"}}>
+          {[{l:"Users",v:users.length},{l:"Projects",v:projects.length},{l:"Sessions",v:sessions.length},{l:"Tasks",v:tasks.length}].map(s=>(
+            <div key={s.l} style={{textAlign:"center"}}>
+              <div style={{fontSize:24,fontWeight:800,color:T.accent}}>{s.v}</div>
+              <div style={{fontSize:11,color:T.textMuted,fontWeight:600,letterSpacing:"0.06em"}}>{s.l.toUpperCase()}</div>
+            </div>
+          ))}
         </div>
       </div>
 
       {/* Tab nav */}
-      <div style={{display:"flex",gap:8,marginBottom:20,borderBottom:"1px solid rgba(255,255,255,.06)",paddingBottom:16,flexWrap:"wrap",alignItems:"center"}}>
-        {[{id:"sessions",l:"📋 SESSIONS"},{id:"projects",l:"🗂 PROJECTS"}].map(t=>(
+      <div style={{display:"flex",gap:6,marginBottom:24,background:T.bgInput,borderRadius:12,padding:4,width:"fit-content",flexWrap:"wrap"}}>
+        {tabs.map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id)}
-            style={{padding:"9px 18px",borderRadius:8,border:"none",cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:"bold",letterSpacing:"1px",background:tab===t.id?ac:"rgba(255,255,255,.05)",color:tab===t.id?"#fff":"#64748b",transition:"all .15s"}}>
+            style={{...btn(tab===t.id?T.accent:"transparent",tab===t.id?"#fff":T.textMuted),padding:"9px 18px",borderRadius:9,fontSize:13,boxShadow:tab===t.id?"0 2px 8px rgba(99,102,241,.3)":"none"}}>
             {t.l}
           </button>
         ))}
-        <button onClick={()=>{ if(tab==="sessions")setShowAddSession(v=>!v); else setShowAddProject(v=>!v); }}
-          style={{...S.btn(),marginLeft:"auto",padding:"9px 18px",fontSize:11}}>
-          {tab==="sessions"?(showAddSession?"✕ CANCEL":"＋ ADD SESSION"):(showAddProject?"✕ CANCEL":"＋ ADD PROJECT")}
+      </div>
+
+      {tab==="members"&&<AdminMembers users={users} projects={projects} pmLinks={pmLinks} onRefresh={loadAll} toast$={toast$} T={T}/>}
+      {tab==="projects"&&<AdminProjects projects={projects} users={users} pmLinks={pmLinks} onRefresh={loadAll} toast$={toast$} T={T}/>}
+      {tab==="sessions"&&<AdminSessions sessions={sessions} projects={projects} users={users} onRefresh={loadAll} toast$={toast$} T={T}/>}
+      {tab==="tasks"&&<AdminTasks tasks={tasks} projects={projects} users={users} pmLinks={pmLinks} onRefresh={loadAll} toast$={toast$} T={T}/>}
+      {tab==="account"&&<AdminAccount me={me} onRefresh={loadAll} toast$={toast$} T={T}/>}
+    </div>
+  );
+}
+
+// ── Admin Members ──
+function AdminMembers({users,projects,pmLinks,onRefresh,toast$,T}){
+  const [showAdd,setShowAdd]=useState(false);
+  const [form,setForm]=useState({username:"",password:"",full_name:"",role:"member",timezone:"Asia/Karachi"});
+  const [editUser,setEditUser]=useState(null);
+  const [busy,setBusy]=useState(false);
+
+  const create=async()=>{
+    if(!form.username.trim()||!form.password.trim()||!form.full_name.trim())return toast$("Fill all required fields","err");
+    setBusy(true);
+    try{
+      await db.post("users",{username:form.username.trim(),password:form.password.trim(),full_name:form.full_name.trim(),role:form.role,timezone:form.timezone});
+      toast$("✅ Member created!");setForm({username:"",password:"",full_name:"",role:"member",timezone:"Asia/Karachi"});setShowAdd(false);onRefresh();
+    }catch(e){toast$("Error: "+(e?.message||"Username may already exist"),"err");}
+    finally{setBusy(false);}
+  };
+
+  const deleteUser=async(id)=>{
+    if(!confirm("Delete this user?"))return;
+    try{await db.del(`users?id=eq.${id}`);toast$("Deleted.");onRefresh();}
+    catch(e){toast$("Error: "+e?.message,"err");}
+  };
+
+  const updateUser=async(id,d)=>{
+    try{await db.patch(`users?id=eq.${id}`,d);toast$("✅ Updated!");onRefresh();setEditUser(null);}
+    catch(e){toast$("Error: "+e?.message,"err");}
+  };
+
+  const thA={padding:"10px 16px",textAlign:"left",fontSize:11,fontWeight:700,letterSpacing:"0.06em",color:T.textMuted,background:T.bgInput,borderBottom:`1px solid ${T.border}`};
+
+  return(
+    <div>
+      {editUser&&(
+        <Modal T={T} onClose={()=>setEditUser(null)} width={520}>
+          <EditUserForm user={editUser} onSave={d=>updateUser(editUser.id,d)} onClose={()=>setEditUser(null)} T={T}/>
+        </Modal>
+      )}
+
+      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:16}}>
+        <button onClick={()=>setShowAdd(v=>!v)} style={{...btn(showAdd?"rgba(220,38,38,.12)":T.accent,showAdd?"#dc2626":"#fff"),padding:"10px 22px",borderRadius:10}}>
+          {showAdd?"✕ Cancel":"＋ Add Member"}
         </button>
       </div>
 
-      {/* ── ADD FORM ── */}
-      {tab==="sessions"&&showAddSession&&(
-        <AddSessionForm projects={projects} onSave={async(d)=>{
-          try{ await api.post("time_sessions",d); toast$("✅ Session added!"); loadAll(); setShowAddSession(false); }
-          catch(e){ toast$("Error: "+e?.message,"err"); }
-        }} onCancel={()=>setShowAddSession(false)}/>
-      )}
-      {tab==="projects"&&showAddProject&&(
-        <AddProjectForm onSave={async(d)=>{
-          try{ await api.post("projects",d); toast$("✅ Project added!"); onRefreshProjects(); setShowAddProject(false); }
-          catch(e){ toast$("Error: "+e?.message,"err"); }
-        }} onCancel={()=>setShowAddProject(false)}/>
-      )}
-
-      {/* Edit modals */}
-      {editRow&&<EditSessionModal session={editRow} projects={projects} onSave={async(d)=>{
-        try{ await api.patch(`time_sessions?id=eq.${editRow.id}`,d); toast$("✅ Updated!"); loadAll(); setEditRow(null); }
-        catch(e){ toast$("Error: "+e?.message,"err"); }
-      }} onClose={()=>setEditRow(null)}/>}
-
-      {editProj&&<EditProjectModal project={editProj} onSave={async(d)=>{
-        try{ await api.patch(`projects?id=eq.${editProj.id}`,d); toast$("✅ Updated!"); onRefreshProjects(); setEditProj(null); }
-        catch(e){ toast$("Error: "+e?.message,"err"); }
-      }} onClose={()=>setEditProj(null)}/>}
-
-      {/* Delete confirm */}
-      {delConfirm&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:8888,display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <div style={{...S.card,width:360,border:"1px solid rgba(220,38,38,.3)",textAlign:"center"}}>
-            <div style={{fontSize:32,marginBottom:12}}>🗑</div>
-            <div style={{fontSize:15,fontWeight:"bold",marginBottom:8}}>Confirm Delete</div>
-            <div style={{fontSize:12,color:"#94a3b8",marginBottom:24}}>This action cannot be undone.</div>
-            <div style={{display:"flex",gap:10,justifyContent:"center"}}>
-              <button onClick={()=>setDelConfirm(null)} style={{...S.btn("rgba(255,255,255,.06)","#94a3b8"),padding:"10px 24px"}}>CANCEL</button>
-              <button onClick={()=>delConfirm.type==="session"?deleteSession(delConfirm.id):deleteProject(delConfirm.id)}
-                style={{...S.btn("#dc2626","#fff"),padding:"10px 24px"}}>DELETE</button>
+      {showAdd&&(
+        <div style={{...card(T),border:"1px solid rgba(99,102,241,.3)",marginBottom:20,animation:"fadeUp .3s ease"}}>
+          <div style={{fontSize:12,fontWeight:700,letterSpacing:"0.1em",color:T.accent,marginBottom:16}}>REGISTER NEW MEMBER</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
+            {[{k:"full_name",l:"Full Name *",ph:"Ahmed Khan"},{k:"username",l:"Username *",ph:"ahmed"},{k:"password",l:"Password *",ph:"••••••••"}].map(f=>(
+              <div key={f.k}>
+                <label style={lbl(T)}>{f.l}</label>
+                <input value={form[f.k]} onChange={e=>setForm(p=>({...p,[f.k]:e.target.value}))} placeholder={f.ph} style={inp(T)} type={f.k==="password"?"password":"text"}/>
+              </div>
+            ))}
+            <div>
+              <label style={lbl(T)}>Role</label>
+              <select value={form.role} onChange={e=>setForm(p=>({...p,role:e.target.value}))} style={{...inp(T)}}>
+                <option value="member">Member</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div>
+              <label style={lbl(T)}>Timezone</label>
+              <select value={form.timezone} onChange={e=>setForm(p=>({...p,timezone:e.target.value}))} style={{...inp(T)}}>
+                {TIMEZONES.map(t=><option key={t.value} value={t.value}>{t.flag} {t.label}</option>)}
+              </select>
             </div>
           </div>
+          <div style={{display:"flex",gap:10}}>
+            <button onClick={create} disabled={busy} style={{...btn(T.accent,"#fff"),padding:"10px 22px",borderRadius:10}}>{busy?"Creating…":"Create Member"}</button>
+            <button onClick={()=>setShowAdd(false)} style={{...btn("transparent",T.textMuted),padding:"10px 22px",border:`1px solid ${T.border}`,borderRadius:10}}>Cancel</button>
+          </div>
         </div>
       )}
 
-      {/* ── SESSIONS TABLE ── */}
-      {tab==="sessions"&&(
+      <div style={{overflowX:"auto",borderRadius:14,border:`1px solid ${T.border}`}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+          <thead><tr>{["Name","Username","Role","Timezone","Projects","Actions"].map(h=><th key={h} style={thA}>{h}</th>)}</tr></thead>
+          <tbody>
+            {users.map((u,i)=>{
+              const myProjects=pmLinks.filter(pm=>pm.user_id===u.id).map(pm=>projects.find(p=>p.id===pm.project_id)).filter(Boolean);
+              const bg=i%2===0?T.bgInput:"transparent";
+              return(
+                <tr key={u.id} style={{background:bg,borderBottom:`1px solid ${T.border}`}}>
+                  <td style={{padding:"12px 16px"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      <div style={{width:32,height:32,borderRadius:"50%",background:aColor(u.full_name),display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:"#fff"}}>{initials(u.full_name)}</div>
+                      <span style={{fontWeight:600,color:T.text}}>{u.full_name}</span>
+                    </div>
+                  </td>
+                  <td style={{padding:"12px 16px",color:T.textMuted,fontFamily:"JetBrains Mono,monospace",fontSize:12}}>@{u.username}</td>
+                  <td style={{padding:"12px 16px"}}>
+                    <span style={{padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:700,background:u.role==="admin"?"rgba(99,102,241,.15)":"rgba(100,116,139,.15)",color:u.role==="admin"?T.accent:T.textMuted}}>
+                      {u.role}
+                    </span>
+                  </td>
+                  <td style={{padding:"12px 16px",fontSize:12,color:T.textMuted}}>{TIMEZONES.find(t=>t.value===u.timezone)?.flag} {(u.timezone||"").split("/")[1]}</td>
+                  <td style={{padding:"12px 16px",maxWidth:200}}>
+                    <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                      {myProjects.length===0?<span style={{fontSize:11,color:T.textDim}}>No projects</span>:myProjects.map(p=>(
+                        <span key={p.id} style={{padding:"2px 8px",borderRadius:6,fontSize:11,fontWeight:600,background:`${p.color||T.accent}20`,color:p.color||T.accent}}>{p.name}</span>
+                      ))}
+                    </div>
+                  </td>
+                  <td style={{padding:"12px 16px"}}>
+                    <div style={{display:"flex",gap:6}}>
+                      <button onClick={()=>setEditUser(u)} style={{...btn("rgba(99,102,241,.12)",T.accent),padding:"5px 12px",borderRadius:7,fontSize:12,border:"1px solid rgba(99,102,241,.25)"}}>Edit</button>
+                      <button onClick={()=>deleteUser(u.id)} style={{...btn("rgba(220,38,38,.1)","#dc2626"),padding:"5px 12px",borderRadius:7,fontSize:12,border:"1px solid rgba(220,38,38,.2)"}}>Del</button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function EditUserForm({user:u,onSave,onClose,T}){
+  const [d,setD]=useState({full_name:u.full_name,username:u.username,password:u.password,role:u.role,timezone:u.timezone||"Asia/Karachi"});
+  return(
+    <div>
+      <div style={{fontSize:12,fontWeight:700,letterSpacing:"0.1em",color:T.accent,marginBottom:16}}>EDIT MEMBER</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:16}}>
+        {[{k:"full_name",l:"Full Name"},{k:"username",l:"Username"},{k:"password",l:"Password"}].map(f=>(
+          <div key={f.k}>
+            <label style={lbl(T)}>{f.l}</label>
+            <input value={d[f.k]} onChange={e=>setD(p=>({...p,[f.k]:e.target.value}))} style={inp(T)} type={f.k==="password"?"password":"text"}/>
+          </div>
+        ))}
         <div>
-          <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap",alignItems:"center"}}>
-            <input value={searchQ} onChange={e=>setSearchQ(e.target.value)} placeholder="🔍 Search developer, task…"
-              style={{...S.inp,width:"auto",flex:"1 1 180px",fontSize:12}}/>
-            <select value={filterProjId} onChange={e=>setFilterProjId(e.target.value)} style={{...S.inp,width:"auto",background:"#0d1117",fontSize:12}}>
-              <option value="ALL">All Projects</option>
-              {projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+          <label style={lbl(T)}>Role</label>
+          <select value={d.role} onChange={e=>setD(p=>({...p,role:e.target.value}))} style={inp(T)}>
+            <option value="member">Member</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div>
+          <label style={lbl(T)}>Timezone</label>
+          <select value={d.timezone} onChange={e=>setD(p=>({...p,timezone:e.target.value}))} style={inp(T)}>
+            {TIMEZONES.map(t=><option key={t.value} value={t.value}>{t.flag} {t.label}</option>)}
+          </select>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:10}}>
+        <button onClick={()=>onSave(d)} style={{...btn(T.accent,"#fff"),padding:"10px 22px",borderRadius:10}}>Save Changes</button>
+        <button onClick={onClose} style={{...btn("transparent",T.textMuted),padding:"10px 22px",border:`1px solid ${T.border}`,borderRadius:10}}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Admin Projects (manage membership) ──
+function AdminProjects({projects,users,pmLinks,onRefresh,toast$,T}){
+  const [sel,setSel]=useState(null); // selected project for member management
+  const [addUserId,setAddUserId]=useState("");
+
+  const membersOf=pid=>pmLinks.filter(pm=>pm.project_id===pid).map(pm=>users.find(u=>u.id===pm.user_id)).filter(Boolean);
+  const nonMembers=pid=>users.filter(u=>!pmLinks.some(pm=>pm.project_id===pid&&pm.user_id===u.id));
+
+  const addMember=async()=>{
+    if(!addUserId)return;
+    try{await db.post("project_members",{project_id:sel.id,user_id:addUserId});toast$("✅ Member added!");setAddUserId("");onRefresh();}
+    catch(e){toast$("Error: "+e?.message,"err");}
+  };
+  const removeMember=async(userId)=>{
+    try{await db.del(`project_members?project_id=eq.${sel.id}&user_id=eq.${userId}`);toast$("Removed.");onRefresh();}
+    catch(e){toast$("Error: "+e?.message,"err");}
+  };
+
+  return(
+    <div style={{display:"grid",gridTemplateColumns:sel?"1fr 1fr":"1fr",gap:20}}>
+      <div>
+        <div style={{fontSize:12,fontWeight:700,color:T.textMuted,letterSpacing:"0.1em",marginBottom:14}}>SELECT PROJECT TO MANAGE MEMBERS</div>
+        {projects.map(p=>{
+          const mc=membersOf(p.id).length;
+          return(
+            <div key={p.id} onClick={()=>setSel(p)} style={{...card(T),display:"flex",alignItems:"center",gap:14,marginBottom:12,cursor:"pointer",border:`1px solid ${sel?.id===p.id?p.color||T.accent:T.border}`,borderLeft:`4px solid ${p.color||T.accent}`,boxShadow:sel?.id===p.id?`0 0 0 1px ${p.color||T.accent}30`:T.shadow,transition:"all .15s"}}>
+              <div style={{width:40,height:40,borderRadius:10,background:p.color||T.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:"#fff"}}>{initials(p.name)}</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:15,fontWeight:700,color:T.text}}>{p.name}</div>
+                <div style={{fontSize:12,color:T.textMuted}}>{mc} member{mc!==1?"s":""}</div>
+              </div>
+              <div style={{fontSize:20,color:T.textDim}}>{sel?.id===p.id?"→":""}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      {sel&&(
+        <div style={{...card(T),border:`1px solid rgba(99,102,241,.25)`,animation:"fadeIn .3s ease"}}>
+          <div style={{fontSize:12,fontWeight:700,letterSpacing:"0.1em",color:T.accent,marginBottom:4}}>MANAGE: {sel.name.toUpperCase()}</div>
+          <div style={{fontSize:13,color:T.textMuted,marginBottom:20}}>Add or remove team members from this project</div>
+
+          {/* Add member */}
+          <div style={{display:"flex",gap:8,marginBottom:20}}>
+            <select value={addUserId} onChange={e=>setAddUserId(e.target.value)} style={{...inp(T),flex:1}}>
+              <option value="">Select member to add…</option>
+              {nonMembers(sel.id).map(u=><option key={u.id} value={u.id}>{u.full_name} (@{u.username})</option>)}
             </select>
-            <button onClick={loadAll} style={{padding:"9px 14px",borderRadius:8,border:"1px solid rgba(255,255,255,.1)",background:"transparent",color:"#64748b",cursor:"pointer",fontFamily:"inherit",fontSize:11}}>
-              {loading?"…":"↻"}
-            </button>
+            <button onClick={addMember} style={{...btn(T.accent,"#fff"),padding:"10px 18px",borderRadius:10,whiteSpace:"nowrap"}}>Add</button>
           </div>
-          <div style={{fontSize:11,color:"#334155",marginBottom:10}}>{filteredSessions.length} / {sessions.length} RECORDS</div>
-          <div style={{overflowX:"auto",borderRadius:14,border:"1px solid rgba(255,255,255,.07)"}}>
-            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:1000}}>
-              <thead>
-                <tr>
-                  {["PROJECT","DEVELOPER","TASK","DESCRIPTION","DATE","START","END","HOURS","STATUS","ACTIONS"].map(h=>(
-                    <th key={h} style={thA}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredSessions.length===0&&<tr><td colSpan={10} style={{padding:48,textAlign:"center",color:"#1e293b",fontSize:13}}>{loading?"Loading…":"No sessions."}</td></tr>}
-                {filteredSessions.map((s,i)=>{
-                  const proj=projects.find(p=>p.id===s.project_id);
-                  const bg=i%2===0?"rgba(255,255,255,.015)":"transparent";
-                  return(
-                    <tr key={s.id} style={{borderBottom:"1px solid rgba(255,255,255,.04)",background:bg}}>
-                      <td style={{padding:"11px 14px",whiteSpace:"nowrap"}}>
-                        {proj?<span style={{padding:"3px 8px",borderRadius:6,background:`${proj.color||"#00ff88"}20`,color:proj.color||"#00ff88",fontSize:10,fontWeight:"bold"}}>{proj.name}</span>:<span style={{color:"#334155",fontSize:10}}>—</span>}
-                      </td>
-                      <td style={{padding:"11px 14px",whiteSpace:"nowrap"}}>
-                        <div style={{display:"flex",alignItems:"center",gap:8}}>
-                          <div style={{width:26,height:26,borderRadius:"50%",background:aColor(s.developer_name),display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,color:"#070710"}}>{initials(s.developer_name)}</div>
-                          <span style={{fontWeight:"bold",color:"#e2e8f0"}}>{s.developer_name}</span>
-                        </div>
-                      </td>
-                      <td style={{padding:"11px 14px",maxWidth:150,fontWeight:600,color:"#e2e8f0",wordBreak:"break-word"}}>{s.task_name}</td>
-                      <td style={{padding:"11px 14px",maxWidth:160,fontSize:11,color:"#64748b",wordBreak:"break-word"}}>{s.task_description||"—"}</td>
-                      <td style={{padding:"11px 14px",fontSize:11,color:"#94a3b8",whiteSpace:"nowrap"}}>{fmtDate(s.start_time,s.timezone)}</td>
-                      <td style={{padding:"11px 14px",fontSize:11,color:"#94a3b8",whiteSpace:"nowrap"}}>{fmtTime(s.start_time,s.timezone)}</td>
-                      <td style={{padding:"11px 14px",fontSize:11,color:s.end_time?"#94a3b8":"#1e293b",whiteSpace:"nowrap"}}>{s.end_time?fmtTime(s.end_time,s.timezone):"—"}</td>
-                      <td style={{padding:"11px 14px",fontWeight:"bold",color:s.status==="active"?"#dc2626":"#00ff88",fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap"}}>{hms(s.duration_seconds)}</td>
-                      <td style={{padding:"11px 14px"}}>
-                        <span style={{padding:"3px 8px",borderRadius:20,fontSize:9,fontWeight:"bold",background:s.status==="active"?"rgba(220,38,38,.15)":"rgba(0,255,136,.1)",color:s.status==="active"?"#dc2626":"#00ff88",border:`1px solid ${s.status==="active"?"rgba(220,38,38,.3)":"rgba(0,255,136,.2)"}`}}>
-                          {s.status==="active"?"ACTIVE":"DONE"}
-                        </span>
-                      </td>
-                      <td style={{padding:"11px 14px",whiteSpace:"nowrap"}}>
-                        <div style={{display:"flex",gap:6}}>
-                          <button onClick={()=>setEditRow(s)} style={{padding:"4px 10px",borderRadius:6,border:"1px solid rgba(99,102,241,.3)",background:"rgba(99,102,241,.1)",color:"#6366f1",cursor:"pointer",fontFamily:"inherit",fontSize:10,fontWeight:"bold"}}>EDIT</button>
-                          <button onClick={()=>setDelConfirm({type:"session",id:s.id})} style={{padding:"4px 10px",borderRadius:6,border:"1px solid rgba(220,38,38,.3)",background:"rgba(220,38,38,.1)",color:"#dc2626",cursor:"pointer",fontFamily:"inherit",fontSize:10,fontWeight:"bold"}}>DEL</button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
 
-      {/* ── PROJECTS TABLE ── */}
-      {tab==="projects"&&(
-        <div>
-          <div style={{overflowX:"auto",borderRadius:14,border:"1px solid rgba(255,255,255,.07)"}}>
-            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-              <thead>
-                <tr>
-                  {["COLOR","NAME","DESCRIPTION","CREATED","SESSIONS","ACTIONS"].map(h=>(
-                    <th key={h} style={thA}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {projects.length===0&&<tr><td colSpan={6} style={{padding:48,textAlign:"center",color:"#1e293b",fontSize:13}}>No projects.</td></tr>}
-                {projects.map((p,i)=>{
-                  const cnt=sessions.filter(s=>s.project_id===p.id).length;
-                  const bg=i%2===0?"rgba(255,255,255,.015)":"transparent";
-                  return(
-                    <tr key={p.id} style={{borderBottom:"1px solid rgba(255,255,255,.04)",background:bg}}>
-                      <td style={{padding:"12px 14px"}}>
-                        <div style={{width:28,height:28,borderRadius:6,background:p.color||"#00ff88"}}/>
-                      </td>
-                      <td style={{padding:"12px 14px",fontWeight:"bold",color:"#e2e8f0"}}>{p.name}</td>
-                      <td style={{padding:"12px 14px",fontSize:11,color:"#64748b",maxWidth:200}}>{p.description||"—"}</td>
-                      <td style={{padding:"12px 14px",fontSize:11,color:"#94a3b8",whiteSpace:"nowrap"}}>{fmtDateTime(p.created_at,"Asia/Karachi")}</td>
-                      <td style={{padding:"12px 14px",fontWeight:"bold",color:p.color||"#00ff88"}}>{cnt}</td>
-                      <td style={{padding:"12px 14px",whiteSpace:"nowrap"}}>
-                        <div style={{display:"flex",gap:6}}>
-                          <button onClick={()=>setEditProj(p)} style={{padding:"4px 10px",borderRadius:6,border:"1px solid rgba(99,102,241,.3)",background:"rgba(99,102,241,.1)",color:"#6366f1",cursor:"pointer",fontFamily:"inherit",fontSize:10,fontWeight:"bold"}}>EDIT</button>
-                          <button onClick={()=>setDelConfirm({type:"project",id:p.id})} style={{padding:"4px 10px",borderRadius:6,border:"1px solid rgba(220,38,38,.3)",background:"rgba(220,38,38,.1)",color:"#dc2626",cursor:"pointer",fontFamily:"inherit",fontSize:10,fontWeight:"bold"}}>DEL</button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          {/* Current members */}
+          <div style={{fontSize:11,fontWeight:700,color:T.textMuted,letterSpacing:"0.08em",marginBottom:10}}>CURRENT MEMBERS ({membersOf(sel.id).length})</div>
+          {membersOf(sel.id).length===0&&<div style={{fontSize:13,color:T.textDim,padding:"12px 0"}}>No members yet. Add someone above.</div>}
+          {membersOf(sel.id).map(m=>(
+            <div key={m.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 0",borderBottom:`1px solid ${T.border}`}}>
+              <div style={{width:36,height:36,borderRadius:"50%",background:aColor(m.full_name),display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:"#fff"}}>{initials(m.full_name)}</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:14,fontWeight:600,color:T.text}}>{m.full_name}</div>
+                <div style={{fontSize:12,color:T.textMuted}}>@{m.username}</div>
+              </div>
+              <button onClick={()=>removeMember(m.id)} style={{...btn("rgba(220,38,38,.1)","#dc2626"),padding:"5px 12px",borderRadius:7,fontSize:12,border:"1px solid rgba(220,38,38,.2)"}}>Remove</button>
+            </div>
+          ))}
         </div>
       )}
     </div>
   );
 }
 
-// ─── Add Session Form ─────────────────────────────────────────────────────────
-function AddSessionForm({ projects, onSave, onCancel }) {
-  const blank = { developer_name:"", task_name:"", task_description:"", timezone:"Asia/Karachi", start_time:"", end_time:"", duration_seconds:"", status:"completed", project_id:"" };
-  const [d, setD] = useState(blank);
-  const set = k => v => setD(p=>({...p,[k]:v}));
-  const save = () => {
-    if(!d.developer_name.trim()||!d.task_name.trim()||!d.start_time) return;
-    const payload = {...d, project_id:d.project_id||null, duration_seconds:d.duration_seconds?parseInt(d.duration_seconds):null, end_time:d.end_time||null};
-    onSave(payload);
+// ── Admin Sessions ──
+function AdminSessions({sessions,projects,users,onRefresh,toast$,T}){
+  const [showAdd,setShowAdd]=useState(false);
+  const [editS,setEditS]=useState(null);
+  const [filterP,setFilterP]=useState("ALL");
+  const [searchQ,setSearchQ]=useState("");
+  const thA={padding:"10px 16px",textAlign:"left",fontSize:11,fontWeight:700,letterSpacing:"0.06em",color:T.textMuted,background:T.bgInput,borderBottom:`1px solid ${T.border}`,whiteSpace:"nowrap"};
+
+  const filtered=sessions.filter(s=>{
+    if(filterP!=="ALL"&&s.project_id!==filterP)return false;
+    if(searchQ){const q=searchQ.toLowerCase();return s.developer_name?.toLowerCase().includes(q)||s.task_name?.toLowerCase().includes(q);}
+    return true;
+  });
+
+  const deleteS=async id=>{
+    if(!confirm("Delete this session?"))return;
+    try{await db.del(`time_sessions?id=eq.${id}`);toast$("Deleted.");onRefresh();}
+    catch(e){toast$("Error: "+e?.message,"err");}
   };
-  return (
-    <div style={{...S.card,border:"1px solid rgba(99,102,241,.25)",marginBottom:20,animation:"fadeIn .3s ease"}}>
-      <div style={{fontSize:10,letterSpacing:"3px",color:"#6366f1",marginBottom:16}}>ADD SESSION MANUALLY</div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:12,marginBottom:14}}>
-        {[
-          {k:"developer_name",lbl:"DEVELOPER *",ph:"Ahmed Khan"},
-          {k:"task_name",lbl:"TASK *",ph:"Fix login bug"},
-          {k:"task_description",lbl:"DESCRIPTION",ph:"Details…"},
-          {k:"start_time",lbl:"START TIME *",type:"datetime-local"},
-          {k:"end_time",lbl:"END TIME",type:"datetime-local"},
-          {k:"duration_seconds",lbl:"DURATION (secs)",ph:"3600",type:"number"},
-        ].map(f=>(
-          <div key={f.k}>
-            <label style={S.lbl}>{f.lbl}</label>
-            <input type={f.type||"text"} value={d[f.k]} onChange={e=>set(f.k)(e.target.value)} placeholder={f.ph||""} style={S.inp}/>
-          </div>
-        ))}
+  const saveS=async(id,d)=>{
+    try{await db.patch(`time_sessions?id=eq.${id}`,d);toast$("✅ Updated!");onRefresh();setEditS(null);}
+    catch(e){toast$("Error: "+e?.message,"err");}
+  };
+  const addS=async d=>{
+    try{await db.post("time_sessions",d);toast$("✅ Session added!");onRefresh();setShowAdd(false);}
+    catch(e){toast$("Error: "+e?.message,"err");}
+  };
+
+  return(
+    <div>
+      {editS&&<Modal T={T} onClose={()=>setEditS(null)} width={640}><AdminSessionForm session={editS} projects={projects} users={users} onSave={d=>saveS(editS.id,d)} onClose={()=>setEditS(null)} T={T}/></Modal>}
+      {showAdd&&<div style={{marginBottom:20}}><AdminSessionForm session={null} projects={projects} users={users} onSave={addS} onClose={()=>setShowAdd(false)} T={T} inline/></div>}
+
+      <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+        <input value={searchQ} onChange={e=>setSearchQ(e.target.value)} placeholder="🔍 Search developer, task…" style={{...inp(T),width:"auto",flex:"1 1 180px"}}/>
+        <select value={filterP} onChange={e=>setFilterP(e.target.value)} style={{...inp(T),width:"auto"}}>
+          <option value="ALL">All Projects</option>
+          {projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <button onClick={()=>setShowAdd(v=>!v)} style={{...btn(showAdd?"rgba(220,38,38,.12)":T.accent,showAdd?"#dc2626":"#fff"),padding:"10px 18px",borderRadius:10,whiteSpace:"nowrap"}}>
+          {showAdd?"✕ Cancel":"＋ Add Session"}
+        </button>
+      </div>
+      <div style={{fontSize:12,color:T.textMuted,marginBottom:10,fontWeight:600}}>{filtered.length} / {sessions.length} RECORDS</div>
+      <div style={{overflowX:"auto",borderRadius:14,border:`1px solid ${T.border}`}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,minWidth:1000}}>
+          <thead><tr>{["Project","Developer","Task","Date","Start","End","Duration","Status","Actions"].map(h=><th key={h} style={thA}>{h}</th>)}</tr></thead>
+          <tbody>
+            {filtered.length===0&&<tr><td colSpan={9} style={{padding:48,textAlign:"center",color:T.textMuted}}>No sessions.</td></tr>}
+            {filtered.map((s,i)=>{
+              const proj=projects.find(p=>p.id===s.project_id);
+              const bg=i%2===0?T.bgInput:"transparent";
+              return(
+                <tr key={s.id} style={{background:bg,borderBottom:`1px solid ${T.border}`}}>
+                  <td style={{padding:"11px 16px"}}>{proj?<span style={{padding:"3px 8px",borderRadius:6,fontSize:11,fontWeight:700,background:`${proj.color||T.accent}20`,color:proj.color||T.accent}}>{proj.name}</span>:<span style={{color:T.textDim,fontSize:11}}>—</span>}</td>
+                  <td style={{padding:"11px 16px"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <div style={{width:26,height:26,borderRadius:"50%",background:aColor(s.developer_name),display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:"#fff"}}>{initials(s.developer_name)}</div>
+                      <span style={{fontWeight:600,color:T.text}}>{s.developer_name}</span>
+                    </div>
+                  </td>
+                  <td style={{padding:"11px 16px",maxWidth:150,color:T.text,wordBreak:"break-word"}}>{s.task_name}</td>
+                  <td style={{padding:"11px 16px",fontSize:12,color:T.textMuted,whiteSpace:"nowrap"}}>{fmtDate(s.start_time,s.timezone)}</td>
+                  <td style={{padding:"11px 16px",fontSize:12,color:T.textMuted,fontFamily:"JetBrains Mono,monospace",whiteSpace:"nowrap"}}>{fmtTime(s.start_time,s.timezone)}</td>
+                  <td style={{padding:"11px 16px",fontSize:12,color:T.textMuted,fontFamily:"JetBrains Mono,monospace",whiteSpace:"nowrap"}}>{s.end_time?fmtTime(s.end_time,s.timezone):"—"}</td>
+                  <td style={{padding:"11px 16px",fontWeight:700,color:T.accent,fontFamily:"JetBrains Mono,monospace",whiteSpace:"nowrap"}}>{hms(s.duration_seconds)}</td>
+                  <td style={{padding:"11px 16px"}}>
+                    <span style={{padding:"3px 8px",borderRadius:20,fontSize:11,fontWeight:700,background:s.status==="active"?"rgba(220,38,38,.15)":"rgba(0,214,143,.12)",color:s.status==="active"?"#dc2626":"#00d68f"}}>{s.status==="active"?"Active":"Done"}</span>
+                  </td>
+                  <td style={{padding:"11px 16px"}}>
+                    <div style={{display:"flex",gap:6}}>
+                      <button onClick={()=>setEditS(s)} style={{...btn("rgba(99,102,241,.12)",T.accent),padding:"5px 10px",borderRadius:7,fontSize:12,border:"1px solid rgba(99,102,241,.2)"}}>Edit</button>
+                      <button onClick={()=>deleteS(s.id)} style={{...btn("rgba(220,38,38,.1)","#dc2626"),padding:"5px 10px",borderRadius:7,fontSize:12,border:"1px solid rgba(220,38,38,.2)"}}>Del</button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function AdminSessionForm({session:s,projects,users,onSave,onClose,T,inline}){
+  const blank={project_id:"",user_id:"",developer_name:"",task_name:"",task_description:"",timezone:"Asia/Karachi",start_time:"",end_time:"",status:"completed"};
+  const [d,setD]=useState(s?{...s,start_time:toLocalInput(s.start_time),end_time:toLocalInput(s.end_time)}:blank);
+  const set=k=>v=>setD(p=>({...p,[k]:v}));
+  const save=()=>{
+    if(!d.developer_name.trim()||!d.task_name.trim()||!d.start_time)return;
+    const start=new Date(d.start_time).toISOString();
+    const end=d.end_time?new Date(d.end_time).toISOString():null;
+    const duration=calcDuration(start,end);
+    onSave({...d,start_time:start,end_time:end,duration_seconds:duration,project_id:d.project_id||null,user_id:d.user_id||null});
+  };
+
+  // Auto-fill developer_name from user selection
+  const onUserChange=uid=>{
+    const u=users.find(u=>u.id===uid);
+    setD(p=>({...p,user_id:uid,developer_name:u?u.full_name:p.developer_name}));
+  };
+
+  const wrap=inline?{...card(T),border:"1px solid rgba(99,102,241,.25)",animation:"fadeUp .3s ease"}:{};
+  return(
+    <div style={wrap}>
+      <div style={{fontSize:12,fontWeight:700,letterSpacing:"0.1em",color:T.accent,marginBottom:16}}>{s?"EDIT SESSION":"ADD SESSION"}</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
         <div>
-          <label style={S.lbl}>PROJECT</label>
-          <select value={d.project_id} onChange={e=>set("project_id")(e.target.value)} style={{...S.inp,background:"#0d1117"}}>
+          <label style={lbl(T)}>Project</label>
+          <select value={d.project_id} onChange={e=>set("project_id")(e.target.value)} style={inp(T)}>
             <option value="">No project</option>
             {projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </div>
         <div>
-          <label style={S.lbl}>TIMEZONE</label>
-          <select value={d.timezone} onChange={e=>set("timezone")(e.target.value)} style={{...S.inp,background:"#0d1117"}}>
+          <label style={lbl(T)}>Team Member</label>
+          <select value={d.user_id} onChange={e=>onUserChange(e.target.value)} style={inp(T)}>
+            <option value="">Select user…</option>
+            {users.map(u=><option key={u.id} value={u.id}>{u.full_name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={lbl(T)}>Developer Name *</label>
+          <input value={d.developer_name} onChange={e=>set("developer_name")(e.target.value)} style={inp(T)}/>
+        </div>
+        <div>
+          <label style={lbl(T)}>Task Name *</label>
+          <input value={d.task_name} onChange={e=>set("task_name")(e.target.value)} style={inp(T)}/>
+        </div>
+        <div>
+          <label style={lbl(T)}>Description</label>
+          <input value={d.task_description} onChange={e=>set("task_description")(e.target.value)} style={inp(T)}/>
+        </div>
+        <div>
+          <label style={lbl(T)}>Timezone</label>
+          <select value={d.timezone} onChange={e=>set("timezone")(e.target.value)} style={inp(T)}>
             {TIMEZONES.map(t=><option key={t.value} value={t.value}>{t.flag} {t.label}</option>)}
           </select>
         </div>
         <div>
-          <label style={S.lbl}>STATUS</label>
-          <select value={d.status} onChange={e=>set("status")(e.target.value)} style={{...S.inp,background:"#0d1117"}}>
+          <label style={lbl(T)}>Start Time *</label>
+          <input type="datetime-local" value={d.start_time} onChange={e=>set("start_time")(e.target.value)} style={inp(T)}/>
+        </div>
+        <div>
+          <label style={lbl(T)}>End Time <span style={{color:T.textDim,fontWeight:400,fontSize:10}}>(duration auto-calculated)</span></label>
+          <input type="datetime-local" value={d.end_time} onChange={e=>set("end_time")(e.target.value)} style={inp(T)}/>
+        </div>
+        <div>
+          <label style={lbl(T)}>Status</label>
+          <select value={d.status} onChange={e=>set("status")(e.target.value)} style={inp(T)}>
             <option value="completed">Completed</option>
             <option value="active">Active</option>
           </select>
         </div>
+        {d.start_time&&d.end_time&&(
+          <div style={{display:"flex",alignItems:"flex-end",paddingBottom:8}}>
+            <div style={{padding:"10px 14px",background:T.bgInput,borderRadius:10,border:`1px solid ${T.border}`,fontSize:13,fontWeight:700,color:T.accent,fontFamily:"JetBrains Mono,monospace"}}>
+              ⏱ {hms(calcDuration(new Date(d.start_time).toISOString(),new Date(d.end_time).toISOString()))}
+            </div>
+          </div>
+        )}
       </div>
       <div style={{display:"flex",gap:10}}>
-        <button onClick={save} style={{...S.btn("#6366f1","#fff"),padding:"10px 22px"}}>SAVE SESSION</button>
-        <button onClick={onCancel} style={{...S.btn("rgba(255,255,255,.06)","#94a3b8"),padding:"10px 22px"}}>CANCEL</button>
+        <button onClick={save} style={{...btn(T.accent,"#fff"),padding:"10px 22px",borderRadius:10}}>{s?"Save Changes":"Add Session"}</button>
+        <button onClick={onClose} style={{...btn("transparent",T.textMuted),padding:"10px 22px",border:`1px solid ${T.border}`,borderRadius:10}}>Cancel</button>
       </div>
     </div>
   );
 }
 
-// ─── Add Project Form ─────────────────────────────────────────────────────────
-function AddProjectForm({ onSave, onCancel }) {
-  const [name, setName] = useState("");
-  const [desc, setDesc] = useState("");
-  const [color, setColor] = useState("#6366f1");
-  return (
-    <div style={{...S.card,border:"1px solid rgba(99,102,241,.25)",marginBottom:20,animation:"fadeIn .3s ease"}}>
-      <div style={{fontSize:10,letterSpacing:"3px",color:"#6366f1",marginBottom:16}}>ADD PROJECT MANUALLY</div>
+// ── Admin Tasks ──
+function AdminTasks({tasks,projects,users,pmLinks,onRefresh,toast$,T}){
+  const [showAdd,setShowAdd]=useState(false);
+  const [editT,setEditT]=useState(null);
+  const [filterP,setFilterP]=useState("ALL");
+  const thA={padding:"10px 16px",textAlign:"left",fontSize:11,fontWeight:700,letterSpacing:"0.06em",color:T.textMuted,background:T.bgInput,borderBottom:`1px solid ${T.border}`,whiteSpace:"nowrap"};
+
+  const filtered=tasks.filter(t=>filterP==="ALL"||t.project_id===filterP);
+
+  const deleteT=async id=>{
+    if(!confirm("Delete this task?"))return;
+    try{await db.del(`tasks?id=eq.${id}`);toast$("Deleted.");onRefresh();}
+    catch(e){toast$("Error: "+e?.message,"err");}
+  };
+  const saveT=async(id,d)=>{
+    try{await db.patch(`tasks?id=eq.${id}`,{...d,updated_at:new Date().toISOString()});toast$("✅ Updated!");onRefresh();setEditT(null);}
+    catch(e){toast$("Error: "+e?.message,"err");}
+  };
+  const addT=async d=>{
+    try{await db.post("tasks",d);toast$("✅ Task created!");onRefresh();setShowAdd(false);}
+    catch(e){toast$("Error: "+e?.message,"err");}
+  };
+
+  return(
+    <div>
+      {editT&&<Modal T={T} onClose={()=>setEditT(null)} width={640}><AdminTaskForm task={editT} projects={projects} users={users} pmLinks={pmLinks} onSave={d=>saveT(editT.id,d)} onClose={()=>setEditT(null)} T={T}/></Modal>}
+      {showAdd&&<div style={{marginBottom:20}}><AdminTaskForm task={null} projects={projects} users={users} pmLinks={pmLinks} onSave={addT} onClose={()=>setShowAdd(false)} T={T} inline/></div>}
+
+      <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+        <select value={filterP} onChange={e=>setFilterP(e.target.value)} style={{...inp(T),width:"auto"}}>
+          <option value="ALL">All Projects</option>
+          {projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <button onClick={()=>setShowAdd(v=>!v)} style={{...btn(showAdd?"rgba(220,38,38,.12)":T.accent,showAdd?"#dc2626":"#fff"),padding:"10px 18px",borderRadius:10,marginLeft:"auto",whiteSpace:"nowrap"}}>
+          {showAdd?"✕ Cancel":"＋ Assign Task"}
+        </button>
+      </div>
+
+      <div style={{overflowX:"auto",borderRadius:14,border:`1px solid ${T.border}`}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,minWidth:960}}>
+          <thead><tr>{["Project","Assigned To","Title","Priority","Status","Deadline","Member Notes","Actions"].map(h=><th key={h} style={thA}>{h}</th>)}</tr></thead>
+          <tbody>
+            {filtered.length===0&&<tr><td colSpan={8} style={{padding:48,textAlign:"center",color:T.textMuted}}>No tasks yet.</td></tr>}
+            {filtered.map((t,i)=>{
+              const proj=projects.find(p=>p.id===t.project_id);
+              const assignee=users.find(u=>u.id===t.user_id);
+              const pr=PRIO_MAP[t.priority]||PRIO_MAP.medium;
+              const st=STATUS_MAP[t.status]||STATUS_MAP.pending;
+              const overdue=t.deadline&&t.status!=="completed"&&new Date(t.deadline)<new Date();
+              const bg=i%2===0?T.bgInput:"transparent";
+              return(
+                <tr key={t.id} style={{background:bg,borderBottom:`1px solid ${T.border}`}}>
+                  <td style={{padding:"11px 16px"}}>{proj?<span style={{padding:"3px 8px",borderRadius:6,fontSize:11,fontWeight:700,background:`${proj.color||T.accent}20`,color:proj.color||T.accent}}>{proj.name}</span>:"—"}</td>
+                  <td style={{padding:"11px 16px"}}>
+                    {assignee?(
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <div style={{width:26,height:26,borderRadius:"50%",background:aColor(assignee.full_name),display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:"#fff"}}>{initials(assignee.full_name)}</div>
+                        <span style={{fontWeight:600,color:T.text,fontSize:12}}>{assignee.full_name}</span>
+                      </div>
+                    ):<span style={{color:T.textDim,fontSize:11}}>Unassigned</span>}
+                  </td>
+                  <td style={{padding:"11px 16px",maxWidth:180,fontWeight:600,color:T.text,wordBreak:"break-word"}}>{t.title}</td>
+                  <td style={{padding:"11px 16px"}}><span style={{padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:700,background:pr.bg,color:pr.c}}>{pr.label}</span></td>
+                  <td style={{padding:"11px 16px"}}><span style={{padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:700,background:st.bg,color:st.c}}>{st.label}</span></td>
+                  <td style={{padding:"11px 16px",fontSize:12,color:overdue?"#dc2626":T.textMuted,whiteSpace:"nowrap",fontWeight:overdue?700:400}}>
+                    {t.deadline||"—"}{overdue?" ⚠":""}
+                  </td>
+                  <td style={{padding:"11px 16px",maxWidth:200,fontSize:12,color:T.textMuted,fontStyle:t.member_notes?"italic":"normal"}}>
+                    {t.member_notes?`"${t.member_notes.slice(0,60)}${t.member_notes.length>60?"…":""}"` :"—"}
+                  </td>
+                  <td style={{padding:"11px 16px"}}>
+                    <div style={{display:"flex",gap:6}}>
+                      <button onClick={()=>setEditT(t)} style={{...btn("rgba(99,102,241,.12)",T.accent),padding:"5px 10px",borderRadius:7,fontSize:12,border:"1px solid rgba(99,102,241,.2)"}}>Edit</button>
+                      <button onClick={()=>deleteT(t.id)} style={{...btn("rgba(220,38,38,.1)","#dc2626"),padding:"5px 10px",borderRadius:7,fontSize:12,border:"1px solid rgba(220,38,38,.2)"}}>Del</button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function AdminTaskForm({task:t,projects,users,pmLinks,onSave,onClose,T,inline}){
+  const blank={project_id:"",user_id:"",title:"",description:"",priority:"medium",status:"pending",deadline:"",notes:""};
+  const [d,setD]=useState(t||blank);
+  const set=k=>v=>setD(p=>({...p,[k]:v}));
+
+  // When project changes, filter users to only project members
+  const projectMembers=d.project_id?users.filter(u=>pmLinks.some(pm=>pm.project_id===d.project_id&&pm.user_id===u.id)):users;
+
+  const save=()=>{
+    if(!d.title.trim()||!d.project_id)return;
+    onSave({...d,user_id:d.user_id||null,deadline:d.deadline||null,notes:d.notes||null});
+  };
+
+  const wrap=inline?{...card(T),border:"1px solid rgba(99,102,241,.25)",animation:"fadeUp .3s ease"}:{};
+  return(
+    <div style={wrap}>
+      <div style={{fontSize:12,fontWeight:700,letterSpacing:"0.1em",color:T.accent,marginBottom:16}}>{t?"EDIT TASK":"ASSIGN NEW TASK"}</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
         <div>
-          <label style={S.lbl}>PROJECT NAME *</label>
-          <input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Backend API" style={S.inp}/>
+          <label style={lbl(T)}>Project *</label>
+          <select value={d.project_id} onChange={e=>{set("project_id")(e.target.value);setD(p=>({...p,user_id:""}));}} style={inp(T)}>
+            <option value="">Select project…</option>
+            {projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
         </div>
         <div>
-          <label style={S.lbl}>DESCRIPTION</label>
-          <input value={desc} onChange={e=>setDesc(e.target.value)} placeholder="Brief description…" style={S.inp}/>
+          <label style={lbl(T)}>Assign To</label>
+          <select value={d.user_id} onChange={e=>set("user_id")(e.target.value)} style={inp(T)}>
+            <option value="">Unassigned</option>
+            {projectMembers.map(u=><option key={u.id} value={u.id}>{u.full_name}</option>)}
+          </select>
         </div>
-      </div>
-      <div style={{marginBottom:16}}>
-        <label style={S.lbl}>COLOR</label>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:4}}>
-          {PROJECT_COLORS.map(c=>(
-            <div key={c} onClick={()=>setColor(c)} style={{width:28,height:28,borderRadius:"50%",background:c,cursor:"pointer",border:color===c?"3px solid #fff":"3px solid transparent"}}/>
-          ))}
+        <div style={{gridColumn:"1/-1"}}>
+          <label style={lbl(T)}>Task Title *</label>
+          <input value={d.title} onChange={e=>set("title")(e.target.value)} placeholder="What needs to be done?" style={inp(T)}/>
+        </div>
+        <div style={{gridColumn:"1/-1"}}>
+          <label style={lbl(T)}>Description</label>
+          <textarea value={d.description} onChange={e=>set("description")(e.target.value)} placeholder="Detailed description of the task…" style={{...inp(T),resize:"vertical",minHeight:72}}/>
+        </div>
+        <div>
+          <label style={lbl(T)}>Priority</label>
+          <select value={d.priority} onChange={e=>set("priority")(e.target.value)} style={inp(T)}>
+            {Object.entries(PRIO_MAP).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={lbl(T)}>Status</label>
+          <select value={d.status} onChange={e=>set("status")(e.target.value)} style={inp(T)}>
+            {Object.entries(STATUS_MAP).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={lbl(T)}>Deadline</label>
+          <input type="date" value={d.deadline||""} onChange={e=>set("deadline")(e.target.value)} style={inp(T)}/>
+        </div>
+        <div>
+          <label style={lbl(T)}>Admin Notes (visible to assignee)</label>
+          <input value={d.notes||""} onChange={e=>set("notes")(e.target.value)} placeholder="Any notes for the team member…" style={inp(T)}/>
         </div>
       </div>
       <div style={{display:"flex",gap:10}}>
-        <button onClick={()=>{if(name.trim())onSave({name:name.trim(),description:desc.trim()||null,color});}} style={{...S.btn("#6366f1","#fff"),padding:"10px 22px"}}>SAVE PROJECT</button>
-        <button onClick={onCancel} style={{...S.btn("rgba(255,255,255,.06)","#94a3b8"),padding:"10px 22px"}}>CANCEL</button>
+        <button onClick={save} style={{...btn(T.accent,"#fff"),padding:"10px 22px",borderRadius:10}}>{t?"Save Changes":"Create Task"}</button>
+        <button onClick={onClose} style={{...btn("transparent",T.textMuted),padding:"10px 22px",border:`1px solid ${T.border}`,borderRadius:10}}>Cancel</button>
       </div>
     </div>
   );
 }
 
-// ─── Edit Session Modal ───────────────────────────────────────────────────────
-function EditSessionModal({ session: s, projects, onSave, onClose }) {
-  const toLocal = iso => iso ? new Date(iso).toISOString().slice(0,16) : "";
-  const [d, setD] = useState({
-    developer_name: s.developer_name||"",
-    task_name: s.task_name||"",
-    task_description: s.task_description||"",
-    timezone: s.timezone||"Asia/Karachi",
-    start_time: toLocal(s.start_time),
-    end_time: toLocal(s.end_time),
-    duration_seconds: s.duration_seconds||"",
-    status: s.status||"completed",
-    project_id: s.project_id||"",
-  });
-  const set = k => v => setD(p=>({...p,[k]:v}));
-  const save = () => {
-    const payload = {
-      ...d,
-      start_time: d.start_time ? new Date(d.start_time).toISOString() : s.start_time,
-      end_time: d.end_time ? new Date(d.end_time).toISOString() : null,
-      duration_seconds: d.duration_seconds ? parseInt(d.duration_seconds) : null,
-      project_id: d.project_id || null,
-    };
-    onSave(payload);
+// ── Admin My Account ──
+function AdminAccount({me,onRefresh,toast$,T}){
+  const [d,setD]=useState({full_name:me.full_name,username:me.username,password:"",newPassword:""});
+  const [busy,setBusy]=useState(false);
+
+  const save=async()=>{
+    if(!d.password)return toast$("Enter current password to confirm","err");
+    if(d.password!==me.password)return toast$("Current password is incorrect","err");
+    setBusy(true);
+    const patch={full_name:d.full_name,username:d.username};
+    if(d.newPassword) patch.password=d.newPassword;
+    try{
+      await db.patch(`users?id=eq.${me.id}`,patch);
+      toast$("✅ Account updated! Please log out and log back in.");onRefresh();
+    }catch(e){toast$("Error: "+e?.message,"err");}
+    finally{setBusy(false);}
   };
-  return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:8888,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-      <div style={{...S.card,width:"100%",maxWidth:640,border:"1px solid rgba(99,102,241,.3)",maxHeight:"90vh",overflowY:"auto"}}>
-        <div style={{fontSize:10,letterSpacing:"3px",color:"#6366f1",marginBottom:20}}>EDIT SESSION</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
-          {[
-            {k:"developer_name",lbl:"DEVELOPER"},
-            {k:"task_name",lbl:"TASK"},
-            {k:"task_description",lbl:"DESCRIPTION"},
-            {k:"start_time",lbl:"START TIME",type:"datetime-local"},
-            {k:"end_time",lbl:"END TIME",type:"datetime-local"},
-            {k:"duration_seconds",lbl:"DURATION (secs)",type:"number"},
-          ].map(f=>(
-            <div key={f.k}>
-              <label style={S.lbl}>{f.lbl}</label>
-              <input type={f.type||"text"} value={d[f.k]} onChange={e=>set(f.k)(e.target.value)} style={S.inp}/>
-            </div>
-          ))}
-          <div>
-            <label style={S.lbl}>PROJECT</label>
-            <select value={d.project_id} onChange={e=>set("project_id")(e.target.value)} style={{...S.inp,background:"#0d1117"}}>
-              <option value="">No project</option>
-              {projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={S.lbl}>STATUS</label>
-            <select value={d.status} onChange={e=>set("status")(e.target.value)} style={{...S.inp,background:"#0d1117"}}>
-              <option value="completed">Completed</option>
-              <option value="active">Active</option>
-            </select>
-          </div>
-          <div>
-            <label style={S.lbl}>TIMEZONE</label>
-            <select value={d.timezone} onChange={e=>set("timezone")(e.target.value)} style={{...S.inp,background:"#0d1117"}}>
-              {TIMEZONES.map(t=><option key={t.value} value={t.value}>{t.flag} {t.label}</option>)}
-            </select>
-          </div>
-        </div>
-        <div style={{display:"flex",gap:10}}>
-          <button onClick={save} style={{...S.btn("#6366f1","#fff"),padding:"10px 22px"}}>SAVE CHANGES</button>
-          <button onClick={onClose} style={{...S.btn("rgba(255,255,255,.06)","#94a3b8"),padding:"10px 22px"}}>CANCEL</button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
-// ─── Edit Project Modal ───────────────────────────────────────────────────────
-function EditProjectModal({ project: p, onSave, onClose }) {
-  const [name, setName]   = useState(p.name||"");
-  const [desc, setDesc]   = useState(p.description||"");
-  const [color, setColor] = useState(p.color||"#00ff88");
-  return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:8888,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-      <div style={{...S.card,width:"100%",maxWidth:480,border:"1px solid rgba(99,102,241,.3)"}}>
-        <div style={{fontSize:10,letterSpacing:"3px",color:"#6366f1",marginBottom:20}}>EDIT PROJECT</div>
-        <div style={{marginBottom:14}}>
-          <label style={S.lbl}>PROJECT NAME</label>
-          <input value={name} onChange={e=>setName(e.target.value)} style={S.inp}/>
-        </div>
-        <div style={{marginBottom:14}}>
-          <label style={S.lbl}>DESCRIPTION</label>
-          <input value={desc} onChange={e=>setDesc(e.target.value)} style={S.inp}/>
-        </div>
-        <div style={{marginBottom:20}}>
-          <label style={S.lbl}>COLOR</label>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:4}}>
-            {PROJECT_COLORS.map(c=>(
-              <div key={c} onClick={()=>setColor(c)} style={{width:28,height:28,borderRadius:"50%",background:c,cursor:"pointer",border:color===c?"3px solid #fff":"3px solid transparent"}}/>
-            ))}
+  return(
+    <div style={{maxWidth:480}}>
+      <div style={{...card(T),border:"1px solid rgba(99,102,241,.25)"}}>
+        <div style={{fontSize:12,fontWeight:700,letterSpacing:"0.1em",color:T.accent,marginBottom:20}}>MY ACCOUNT SETTINGS</div>
+        <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:24,padding:"16px",background:T.bgInput,borderRadius:12}}>
+          <div style={{width:52,height:52,borderRadius:"50%",background:aColor(me.full_name),display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:800,color:"#fff"}}>{initials(me.full_name)}</div>
+          <div>
+            <div style={{fontSize:16,fontWeight:700,color:T.text}}>{me.full_name}</div>
+            <div style={{fontSize:12,color:T.accent,fontWeight:600}}>@{me.username} · {me.role}</div>
           </div>
         </div>
-        <div style={{display:"flex",gap:10}}>
-          <button onClick={()=>onSave({name:name.trim(),description:desc.trim()||null,color})} style={{...S.btn("#6366f1","#fff"),padding:"10px 22px"}}>SAVE CHANGES</button>
-          <button onClick={onClose} style={{...S.btn("rgba(255,255,255,.06)","#94a3b8"),padding:"10px 22px"}}>CANCEL</button>
-        </div>
+        {[{k:"full_name",l:"Full Name"},{k:"username",l:"Username"},{k:"password",l:"Current Password (to confirm changes)",type:"password"},{k:"newPassword",l:"New Password (leave blank to keep current)",type:"password"}].map(f=>(
+          <div key={f.k} style={{marginBottom:16}}>
+            <label style={lbl(T)}>{f.l}</label>
+            <input type={f.type||"text"} value={d[f.k]} onChange={e=>setD(p=>({...p,[f.k]:e.target.value}))} style={inp(T)}/>
+          </div>
+        ))}
+        <button onClick={save} disabled={busy} style={{...btn(T.accent,"#fff"),padding:"12px 28px",borderRadius:10,boxShadow:`0 4px 14px rgba(99,102,241,.3)`,width:"100%",fontSize:14,fontWeight:700}}>
+          {busy?"Saving…":"Save Changes"}
+        </button>
       </div>
     </div>
   );
